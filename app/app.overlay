@@ -8,20 +8,49 @@
         };
     };
 
-    /* 自定义 pinctrl（改名避免与系统标签冲突） */
+    /* Zigbee 控制引脚 */
+    zigbee_ctrl: zigbee-ctrl {
+        compatible = "gpio-leds";
+        link_zig: link_zig {
+            gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+            label = "Zigbee Link";
+        };
+        mode_zig: mode_zig {
+            gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+            label = "Zigbee Mode";
+        };
+    };
+
+    /* 自定义 pinctrl */
     my_pinctrl: pinctrl {
         compatible = "nordic,nrf-pinctrl";
+
+        /* RS-485 UART21 */
         uart21_default: uart21_default {
             psels = <NRF_PSEL(UART_TX, 1, 4)>,   /* P1.04 为 TX */
                     <NRF_PSEL(UART_RX, 1, 5)>;    /* P1.05 为 RX */
         };
+
+        /* Zigbee UART22 - 新增 */
+        uart22_default: uart22_default {
+            psels = <NRF_PSEL(UART_TX, 1, 12)>,  /* P1.12 为 TX (发送给Zigbee) */
+                    <NRF_PSEL(UART_RX, 1, 13)>;   /* P1.13 为 RX (接收自Zigbee) */
+        };
     };
 };
 
-/* 启用 UART21 并应用自定义 pinctrl */
+/* RS-485 UART */
 &uart21 {
     status = "okay";
     current-speed = <115200>;
     pinctrl-0 = <&uart21_default>;
+    pinctrl-names = "default";
+};
+
+/* Zigbee UART - 新增 */
+&uart22 {
+    status = "okay";
+    current-speed = <115200>;  /* 根据Zigbee模组规格调整 */
+    pinctrl-0 = <&uart22_default>;
     pinctrl-names = "default";
 };
