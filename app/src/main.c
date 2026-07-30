@@ -2,6 +2,7 @@
 #include <zephyr/logging/log.h>
 #include "ble_handlers.h"
 #include "zigbee_handlers.h"
+#include "rs485_handlers.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -10,23 +11,29 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 #define BT_TX_PRIORITY 4
 #define ZIGBEE_RX_PRIORITY 5
 #define ZIGBEE_TX_PRIORITY 4
+#define RS485_RX_PRIORITY  5
+#define RS485_TX_PRIORITY  4
 
 K_THREAD_STACK_DEFINE(bt_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(bt_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(zigbee_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(zigbee_tx_stack, THREAD_STACK_SIZE);
+K_THREAD_STACK_DEFINE(rs485_rx_stack, THREAD_STACK_SIZE);
+K_THREAD_STACK_DEFINE(rs485_tx_stack, THREAD_STACK_SIZE);
 
 static struct k_thread bt_rx_thread_data;
 static struct k_thread bt_tx_thread_data;
 static struct k_thread zigbee_rx_thread_data;
 static struct k_thread zigbee_tx_thread_data;
+static struct k_thread rs485_rx_thread_data;
+static struct k_thread rs485_tx_thread_data;
 
 int main(void) {
     LOG_INF("=== Gateway Started ===");
 
     zigbee_init();
-
     ble_init();
+    rs485_init();
 
     k_thread_create(&bt_rx_thread_data, bt_rx_stack,
                     K_THREAD_STACK_SIZEOF(bt_rx_stack),
@@ -51,6 +58,17 @@ int main(void) {
                     zigbee_tx_thread_entry, NULL, NULL, NULL,
                     ZIGBEE_TX_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(&zigbee_tx_thread_data, "ZIG_TX");
+    k_thread_create(&rs485_rx_thread_data, rs485_rx_stack,
+                    K_THREAD_STACK_SIZEOF(rs485_rx_stack),
+                    rs485_rx_thread_entry, NULL, NULL, NULL,
+                    RS485_RX_PRIORITY, 0, K_NO_WAIT);
+    k_thread_name_set(&rs485_rx_thread_data, "RS485_RX");
+
+    k_thread_create(&rs485_tx_thread_data, rs485_tx_stack,
+                    K_THREAD_STACK_SIZEOF(rs485_tx_stack),
+                    rs485_tx_thread_entry, NULL, NULL, NULL,
+                    RS485_TX_PRIORITY, 0, K_NO_WAIT);
+    k_thread_name_set(&rs485_tx_thread_data, "RS485_TX");
 
     LOG_INF("All threads created");
 
