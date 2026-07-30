@@ -1,0 +1,27 @@
+/ {
+    /* RS-485 方向控制引脚 (DE/RE) - P1.06 */
+    rs485_ctrl: rs485-ctrl {
+        compatible = "gpio-leds";
+        de: de {
+            gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+            label = "RS485 DE";
+        };
+    };
+
+    /* 自定义 pinctrl（改名避免与系统标签冲突） */
+    my_pinctrl: pinctrl {
+        compatible = "nordic,nrf-pinctrl";
+        uart21_default: uart21_default {
+            psels = <NRF_PSEL(UART_TX, 1, 4)>,   /* P1.04 为 TX */
+                    <NRF_PSEL(UART_RX, 1, 5)>;    /* P1.05 为 RX */
+        };
+    };
+};
+
+/* 启用 UART21 并应用自定义 pinctrl */
+&uart21 {
+    status = "okay";
+    current-speed = <115200>;
+    pinctrl-0 = <&uart21_default>;
+    pinctrl-names = "default";
+};

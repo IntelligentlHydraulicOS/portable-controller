@@ -1,0 +1,13 @@
+# Target labels
+ app
+# Source files and their labels
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/CMakeFiles/app
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/CMakeFiles/app.rule
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/CMakeFiles/app-complete.rule
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/app-prefix/src/app-stamp/app-build.rule
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/app-prefix/src/app-stamp/app-configure.rule
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/app-prefix/src/app-stamp/app-download.rule
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/app-prefix/src/app-stamp/app-install.rule
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/app-prefix/src/app-stamp/app-mkdir.rule
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/app-prefix/src/app-stamp/app-patch.rule
+/home/binbin/ncs-workspace/moving_controler/app/build/_sysbuild/sysbuild/images/app-prefix/src/app-stamp/app-update.rule

@@ -1,0 +1,2 @@
+"nrf":"/home/binbin/ncs-workspace/nrf":"/home/binbin/ncs-workspace/nrf/sysbuild"
+"mcuboot":"/home/binbin/ncs-workspace/bootloader/mcuboot":"/home/binbin/ncs-workspace/bootloader/mcuboot/boot/zephyr/sysbuild"
