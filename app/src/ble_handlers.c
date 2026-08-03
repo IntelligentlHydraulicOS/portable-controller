@@ -1,10 +1,11 @@
 #include "ble_handlers.h"
-#include "command_parser.h"
+#include "worker.h"
 #include "rs485_handlers.h"
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/services/nus.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
+#include "message.h"
 
 LOG_MODULE_REGISTER(ble, LOG_LEVEL_INF);
 
@@ -18,14 +19,6 @@ static const struct bt_data ad[] = {
 
 static const struct bt_data sd[] = {
     BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_NUS_SRV_VAL),
-};
-
-#define TX_MSG_MAX_DATA 256
-#define TX_MSG_QUEUE_SIZE 10
-
-struct tx_msg {
-    uint8_t data[TX_MSG_MAX_DATA];
-    uint16_t len;
 };
 
 K_MSGQ_DEFINE(bt_rx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
@@ -89,6 +82,9 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3) {
     struct tx_msg rx_msg;
     uint8_t reply[TX_MSG_MAX_DATA];
     size_t reply_len;
+    worker_t *worker = get_worker();
+    worker->source = CMD_SOURCE_BT;
+    worker->tx_msg = get_bt_tx_msgq();
 
     while (1) {
         if (k_msgq_get(&bt_rx_msgq, &rx_msg, K_FOREVER) != 0) {
@@ -97,8 +93,8 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3) {
 
         LOG_INF("BT RX %u bytes", rx_msg.len);
         LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "BT Cmd:");
-
-        int ret = parse_command(rx_msg.data, rx_msg.len, reply, &reply_len, CMD_SOURCE_BT);
+ 
+        int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
 
         if (ret == 1) {
             if (rx_msg.len > 1) {
@@ -126,15 +122,14 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3) {
             struct tx_msg tx_msg;
             memcpy(tx_msg.data, reply, reply_len);
             tx_msg.len = reply_len;
-            if (k_msgq_put(&bt_tx_msgq, &tx_msg, K_NO_WAIT) != 0) {
-                LOG_WRN("BT TX queue full");
+            if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
+                LOG_WRN("TX queue full");
             } else {
-                LOG_INF("BT reply enqueued");
+                LOG_INF("reply enqueued");
             }
         }
-
-        rs485_send(rx_msg.data, rx_msg.len);
     }
+    free_worker(worker);
 }
 
 void ble_tx_thread_entry(void *p1, void *p2, void *p3) {

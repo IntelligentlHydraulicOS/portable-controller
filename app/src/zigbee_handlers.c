@@ -1,10 +1,11 @@
 #include "zigbee_handlers.h"
-#include "command_parser.h"
+#include "worker.h"
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
+#include "message.h"
 
 LOG_MODULE_REGISTER(zigbee, LOG_LEVEL_INF);
 
@@ -16,13 +17,6 @@ static const struct device *uart_zigbee_dev = DEVICE_DT_GET(UART_ZIGBEE_NODE);
 static const struct gpio_dt_spec link_zig_gpio = GPIO_DT_SPEC_GET(LINK_ZIG_NODE, gpios);
 static const struct gpio_dt_spec mode_zig_gpio = GPIO_DT_SPEC_GET(MODE_ZIG_NODE, gpios);
 
-#define TX_MSG_MAX_DATA 256
-#define TX_MSG_QUEUE_SIZE 10
-
-struct tx_msg {
-    uint8_t data[TX_MSG_MAX_DATA];
-    uint16_t len;
-};
 
 K_MSGQ_DEFINE(zigbee_rx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
 K_MSGQ_DEFINE(zigbee_tx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
@@ -102,6 +96,9 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
     struct tx_msg rx_msg;
     uint8_t reply[TX_MSG_MAX_DATA];
     size_t reply_len;
+    worker_t *worker = get_worker();
+    worker->source = CMD_SOURCE_ZIGBEE;
+    worker->tx_msg = zigbee_tx_msgq_get();
 
     while (1) {
         if (k_msgq_get(&zigbee_rx_msgq, &rx_msg, K_FOREVER) != 0) {
@@ -111,7 +108,7 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
         LOG_INF("Zigbee RX %u bytes", rx_msg.len);
         LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "Zigbee Cmd:");
 
-        int ret = parse_command(rx_msg.data, rx_msg.len, reply, &reply_len, CMD_SOURCE_ZIGBEE);
+        int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
 
         if (ret == 1) {
             snprintf((char *)reply, sizeof(reply), "ZIG:FORBIDDEN");
@@ -132,6 +129,7 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
             }
         }
     }
+    free_worker(worker);
 }
 
 void zigbee_tx_thread_entry(void *p1, void *p2, void *p3) {
