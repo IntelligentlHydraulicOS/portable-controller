@@ -71,40 +71,22 @@ uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, u
     if (worker == NULL || data == NULL || len < 9 || reply == NULL || reply_len == NULL) {
         return 0;
     }
-    if (is_worker_connected(worker)) {
-        uint8_t controller_id = data[len - 2];
-        if(worker->controller_id == controller_id){
-            snprintf((char *)reply, TX_MSG_MAX_DATA, "Already connected to controller %u", worker->controller_id);
-            *reply_len = strlen((char *)reply);
-            return 1;
-        }else{
-            if (data[3] == 0 && data[4] == worker->local_id){
-                worker->is_ready = false;
-                k_timer_stop(&worker->timer_heartbeat);
-                k_timer_stop(&worker->timer_action);
-                worker->action_id = 0;
-                snprintf((char *)reply, TX_MSG_MAX_DATA, "broken connected to controller %u,connect to controller %u", worker->controller_id, controller_id);
-                *reply_len = strlen((char *)reply);
-                worker->controller_id = controller_id;
-                worker->is_connected = true;
-                k_timer_start(&worker->timer_heartbeat, K_SECONDS(1), K_SECONDS(1));
-                return 1;
-            }
-        }
-        snprintf((char *)reply, TX_MSG_MAX_DATA, "Already connected");
+
+    if (data[3] == 0){
+        worker->is_ready = false;
+        k_timer_stop(&worker->timer_heartbeat);
+        k_timer_stop(&worker->timer_action);
+        worker->action_id = 0;
+        uint8_t controller_id = data[len -2];
+        worker->controller_id = controller_id;
+        worker->is_connected = true;
+        k_timer_start(&worker->timer_heartbeat, K_SECONDS(1), K_SECONDS(1));
+        snprintf((char *)reply, TX_MSG_MAX_DATA, "connect to controller %u", worker->controller_id);
         *reply_len = strlen((char *)reply);
         return 1;
     }else{
-        //only single controller is supported, so we just check if the data[4] is 0, which means the controller is chosen
-        if (data[3] == 0 && data[4] == worker->local_id){
-            uint8_t controller_id = data[len -2];
-            worker->controller_id = controller_id;
-            worker->is_connected = true;
-            k_timer_start(&worker->timer_heartbeat, K_SECONDS(1), K_SECONDS(1));
-            snprintf((char *)reply, TX_MSG_MAX_DATA, "Connected to controller %u", controller_id);
-            *reply_len = strlen((char *)reply);
-            return 1;
-        }
+        snprintf((char *)reply, TX_MSG_MAX_DATA, "choose not supported, please choose controller 0");
+        *reply_len = strlen((char *)reply);
     }
     return 0;
 }
@@ -120,20 +102,20 @@ uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
         return 0;
     }
 
-    if(is_worker_ready(worker)){
-        snprintf((char *)reply, TX_MSG_MAX_DATA, "Already ready");
+    if(is_worker_connected(worker) == false){
+        snprintf((char *)reply, TX_MSG_MAX_DATA, "Worker not connected to controller");
         *reply_len = strlen((char *)reply);
-        return 1;
-    }else{
-        uint8_t action_id = data[3];
-        worker->action_id = action_id;
-        worker->is_ready = true;
-        k_timer_start(&worker->timer_action, K_MSEC(300), K_MSEC(300));
-        snprintf((char *)reply, TX_MSG_MAX_DATA, "Action %u chosen", action_id);
-        *reply_len = strlen((char *)reply);
-        return 1;
+        return 0;
     }
-    return 0;
+    uint8_t action_id = data[3];
+    worker->action_id = action_id;
+    worker->is_ready = true;
+
+    // action depends on the remote controller
+    k_timer_start(&worker->timer_action, K_MSEC(300), K_NO_WAIT);
+    snprintf((char *)reply, TX_MSG_MAX_DATA, "Action %u chosen", action_id);
+    *reply_len = strlen((char *)reply);
+    return 1;
 }
 
 uint8_t cancel_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len) {
