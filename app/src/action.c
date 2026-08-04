@@ -34,7 +34,7 @@ static const action_mapping_t g_action_mapping[] = {
 
 #define ACTION_MAPPING_COUNT  (sizeof(g_action_mapping) / sizeof(action_mapping_t))
 
-uint8_t get_channel_by_name(const char *s)
+uint8_t get_channel_offset_by_name(const char *s)
 {
     if (s == NULL)
     {
@@ -51,7 +51,7 @@ uint8_t get_channel_by_name(const char *s)
     return 0xFF;
 }
 
-uint8_t get_channel_by_action_id(uint8_t action_id)
+uint8_t get_channel_offset_by_action_id(uint8_t action_id)
 {
     for (uint8_t i = 0; i < ACTION_MAPPING_COUNT; i++)
     {

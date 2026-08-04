@@ -10,6 +10,6 @@ typedef struct {
     const char *name;
 } action_mapping_t;
 
-uint8_t get_channel_by_action_id(uint8_t action_id);
-uint8_t get_channel_by_name(const char *s);
+uint8_t get_channel_offset_by_action_id(uint8_t action_id);
+uint8_t get_channel_offset_by_name(const char *s);
 #endif
