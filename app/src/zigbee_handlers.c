@@ -33,7 +33,7 @@ static void zigbee_uart_cb(const struct device *dev, void *user_data) {
 
     while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
         if (uart_irq_rx_ready(dev)) {
-            len = uart_fifo_read(dev, buf, sizeof(buf));
+            len = uart_fifo_read(dev, buf, 64);
             if (len > 0) {
                 if (total_len + len > TX_MSG_MAX_DATA) {
                     LOG_WRN("Zigbee RX overflow");
@@ -111,10 +111,10 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
         int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
 
         if (ret == 1) {
-            snprintf((char *)reply, sizeof(reply), "ZIG:FORBIDDEN");
+            snprintf((char *)reply, TX_MSG_MAX_DATA, "ZIG:FORBIDDEN");
             reply_len = strlen((char *)reply);
         } else if (ret < 0) {
-            snprintf((char *)reply, sizeof(reply), "PARSE_ERROR");
+            snprintf((char *)reply, TX_MSG_MAX_DATA, "PARSE_ERROR");
             reply_len = strlen((char *)reply);
         }
 
@@ -122,7 +122,7 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
             struct tx_msg tx_msg;
             memcpy(tx_msg.data, reply, reply_len);
             tx_msg.len = reply_len;
-            if (k_msgq_put(&zigbee_tx_msgq, &tx_msg, K_NO_WAIT) != 0) {
+            if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
                 LOG_WRN("Zigbee TX queue full");
             } else {
                 LOG_INF("Zigbee reply enqueued");

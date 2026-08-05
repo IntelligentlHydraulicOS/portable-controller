@@ -103,18 +103,18 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3) {
                 memcpy(zigbee_msg.data, rx_msg.data + 1, zigbee_msg.len);
                 struct k_msgq *zigbee_tx = zigbee_tx_msgq_get();
                 if (k_msgq_put(zigbee_tx, &zigbee_msg, K_NO_WAIT) == 0) {
-                    snprintf((char *)reply, sizeof(reply), "ZIG:SENT");
+                    snprintf((char *)reply, TX_MSG_MAX_DATA, "ZIG:SENT");
                     reply_len = strlen((char *)reply);
                 } else {
-                    snprintf((char *)reply, sizeof(reply), "ZIG:QUEUE_FULL");
+                    snprintf((char *)reply, TX_MSG_MAX_DATA, "ZIG:QUEUE_FULL");
                     reply_len = strlen((char *)reply);
                 }
             } else {
-                snprintf((char *)reply, sizeof(reply), "ZIG:NO_DATA");
+                snprintf((char *)reply, TX_MSG_MAX_DATA, "ZIG:NO_DATA");
                 reply_len = strlen((char *)reply);
             }
         } else if (ret < 0) {
-            snprintf((char *)reply, sizeof(reply), "PARSE_ERROR");
+            snprintf((char *)reply, TX_MSG_MAX_DATA, "PARSE_ERROR");
             reply_len = strlen((char *)reply);
         }
 

@@ -6,12 +6,12 @@
 #include "worker.h"
 #include "action.h"
 #include "message.h"
-
+#include "log.h"
 
 uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 uint8_t cancel_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
-
+uint8_t get_log_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 void init_worker(worker_t *worker) {
     worker->local_id = 0;
     worker->action_id = 0;
@@ -53,6 +53,7 @@ command_handler_t g_command_handlers[] = {
     {0x00, choose_controller_handler},
     {0x01, choose_action_handler},
     {0xFF, cancel_action_handler},
+    {0x02, get_log_handler},
 };
 
 uint8_t Xor(const void* data, int length){
@@ -140,6 +141,17 @@ uint8_t cancel_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
     }
 
     return 0;
+}
+
+uint8_t get_log_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len) {
+    if (worker == NULL || data == NULL || len < 9 || reply == NULL || reply_len == NULL) {
+        return 0;
+    }
+    //TODO need thread to send all logs
+    send_all_logs(worker);
+    snprintf((char *)reply, TX_MSG_MAX_DATA, "Logs sent");
+    *reply_len = strlen((char *)reply);
+    return 1;
 }
 
 uint8_t do_work(worker_t *worker, uint8_t *data, size_t len,
