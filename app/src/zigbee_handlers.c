@@ -21,7 +21,9 @@ static const struct gpio_dt_spec mode_zig_gpio = GPIO_DT_SPEC_GET(MODE_ZIG_NODE,
 K_MSGQ_DEFINE(zigbee_rx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
 K_MSGQ_DEFINE(zigbee_tx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
 
-extern struct k_msgq *get_bt_tx_msgq(void);
+struct k_msgq *get_zigbee_tx_msgq(void) {
+    return &zigbee_tx_msgq;
+}
 
 static void zigbee_uart_cb(const struct device *dev, void *user_data) {
     ARG_UNUSED(user_data);
@@ -95,10 +97,10 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
 
     struct tx_msg rx_msg;
     uint8_t reply[TX_MSG_MAX_DATA];
-    size_t reply_len;
+    size_t reply_len = 0;
     worker_t *worker = get_worker();
     worker->source = CMD_SOURCE_ZIGBEE;
-    worker->tx_msg = zigbee_tx_msgq_get();
+    worker->tx_msg = get_zigbee_tx_msgq();
 
     while (1) {
         if (k_msgq_get(&zigbee_rx_msgq, &rx_msg, K_FOREVER) != 0) {
@@ -110,16 +112,9 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
 
         int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
 
-        if (ret == 1) {
-            snprintf((char *)reply, TX_MSG_MAX_DATA, "ZIG:FORBIDDEN");
-            reply_len = strlen((char *)reply);
-        } else if (ret < 0) {
-            snprintf((char *)reply, TX_MSG_MAX_DATA, "PARSE_ERROR");
-            reply_len = strlen((char *)reply);
-        }
-
-        if (reply_len > 0) {
+        if (ret == 1  && reply_len > 0) {
             struct tx_msg tx_msg;
+            memset(&tx_msg, 0, sizeof(tx_msg));
             memcpy(tx_msg.data, reply, reply_len);
             tx_msg.len = reply_len;
             if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
@@ -148,8 +143,4 @@ void zigbee_tx_thread_entry(void *p1, void *p2, void *p3) {
         LOG_INF("Zigbee sent %u bytes", msg.len);
         LOG_HEXDUMP_INF(msg.data, msg.len, "Zigbee Sent:");
     }
-}
-
-struct k_msgq *zigbee_tx_msgq_get(void) {
-    return &zigbee_tx_msgq;
 }

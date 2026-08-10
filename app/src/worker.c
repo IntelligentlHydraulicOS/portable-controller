@@ -113,7 +113,7 @@ uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
     worker->is_ready = true;
 
     // action depends on the remote controller
-    k_timer_start(&worker->timer_action, K_MSEC(300), K_NO_WAIT);
+    k_timer_start(&worker->timer_action, K_MSEC(5000), K_SECONDS(10));
     snprintf((char *)reply, TX_MSG_MAX_DATA, "Action %u chosen", action_id);
     *reply_len = strlen((char *)reply);
     return 1;
@@ -157,16 +157,19 @@ uint8_t get_log_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *re
 uint8_t do_work(worker_t *worker, uint8_t *data, size_t len,
                   uint8_t *reply, size_t *reply_len) {
     if (!data || len != 9 || !reply || !reply_len) {
-        *reply_len = 0;
+        if (reply_len) {
+            *reply_len = 0;
+        }
         return -EINVAL;
     }
 
+    *reply_len = 0;
     uint8_t response = 0;
 
     if (data[0] != 0xAA || data[1]!= 0x55) {
         return 0;
     }
-    if (Xor(data, len) != data[len - 1]) {
+    if (Xor(data, len - 1) != data[len - 1]) {
         return 0;
     }
 
@@ -174,6 +177,7 @@ uint8_t do_work(worker_t *worker, uint8_t *data, size_t len,
     for (int i = 0; g_command_handlers[i].handler != NULL; i++) {
         if (g_command_handlers[i].id == cmd) {
             response = g_command_handlers[i].handler(worker, data, len, reply, reply_len);
+            break;
         }
     }
     return response;

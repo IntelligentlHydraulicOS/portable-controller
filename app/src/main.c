@@ -11,7 +11,7 @@
 #include <zephyr/fs/littlefs.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
 #define THREAD_STACK_SIZE 2048
 #define BT_RX_PRIORITY 5
@@ -44,7 +44,7 @@ static struct k_thread zigbee_tx_thread_data;
 static struct k_thread rs485_rx_thread_data;
 static struct k_thread rs485_tx_thread_data;
 
-static const struct device *flash_dev;
+static const struct device *flash_dev = DEVICE_DT_GET(FLASH_DEV_NODE);
 int mount_log_fs(void) {
     if (!device_is_ready(flash_dev)) {
         LOG_ERR("Flash device not ready");
@@ -63,7 +63,7 @@ int mount_log_fs(void) {
         .mnt_point = "/lfs",
         .storage_dev = &fa,
         .fs_data = NULL,
-        .flags = 0,  // 不设置 NO_FORMAT，允许格式化
+        .flags = 0,
     };
 
     int rc = fs_mount(&mp);
@@ -81,7 +81,6 @@ int mount_log_fs(void) {
         return rc;
     }
 
-    /* 格式化后再次挂载 */
     rc = fs_mount(&mp);
     if (rc == 0) {
         LOG_INF("LittleFS mounted after format");
@@ -91,20 +90,20 @@ int mount_log_fs(void) {
     return rc;
 }
 
-
 int main(void) {
-    int ret = mount_log_fs();
-    if (ret == 0) {
-        LOG_INF("Log filesystem ready, logs will be saved.");
-    } else {
-        LOG_WRN("Log filesystem unavailable, logs will NOT persist.");
-    }
+    // int ret = mount_log_fs();
+    // if (ret == 0) {
+    //     LOG_INF("Log filesystem ready, logs will be saved.");
+    // } else {
+    //     LOG_WRN("Log filesystem unavailable, logs will NOT persist.");
+    // }
 
     LOG_INF("=== Gateway Started ===");
 
-    zigbee_init();
+    // zigbee_init();
     ble_init();
     rs485_init();
+    LOG_INF("=== init done start thread ===");
 
     k_thread_create(&bt_rx_thread_data, bt_rx_stack,
                     K_THREAD_STACK_SIZEOF(bt_rx_stack),
