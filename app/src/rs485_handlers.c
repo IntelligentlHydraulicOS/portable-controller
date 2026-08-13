@@ -51,7 +51,8 @@ static void rs485_uart_cb(const struct device *dev, void *user_data)
     }
 
     /* 检查是否收到结束标志（'\r' 或 '\n'），也可以添加超时机制 */
-    if (rx_len > 0 && (rx_buf[rx_len-1] == '\n' || rx_buf[rx_len-1] == '\r')) {
+    // if (rx_len > 0 && (rx_buf[rx_len-1] == '\n' || rx_buf[rx_len-1] == '\r')) {
+    if (rx_len > 0) {
         struct tx_msg msg;
         msg.len = rx_len;
         memcpy(msg.data, rx_buf, rx_len);
@@ -69,7 +70,7 @@ void rs485_send(const uint8_t *data, size_t len)
         return;
     }
 
-    gpio_pin_set_dt(&de_gpio, 1);          /* 发送模式 */
+    // gpio_pin_set_dt(&de_gpio, 1);          /* 发送模式 */
 
     for (size_t i = 0; i < len; i++) {
         uart_poll_out(uart485_dev, data[i]);
@@ -84,7 +85,7 @@ void rs485_send(const uint8_t *data, size_t len)
     uint32_t wait_us = total_bytes * byte_time_us + 100; // 增加安全余量
     k_busy_wait(wait_us);
 
-    gpio_pin_set_dt(&de_gpio, 0);           /* 切回接收 */
+    // gpio_pin_set_dt(&de_gpio, 0);           /* 切回接收 */
 }
 
 /* ---------- 初始化 ---------- */
@@ -94,9 +95,15 @@ void rs485_init(void)
         LOG_ERR("DE GPIO not ready");
         return;
     }
-    gpio_pin_configure_dt(&de_gpio, GPIO_OUTPUT);
-    gpio_pin_set_dt(&de_gpio, 0);
-
+    int ret = gpio_pin_configure_dt(&de_gpio, GPIO_OUTPUT|GPIO_PULL_UP);
+    if (ret < 0) {
+        LOG_ERR("DE config failed: %d", ret);
+        return;
+    }
+    ret = gpio_pin_set_dt(&de_gpio, 1);
+    if (ret < 0) {
+        LOG_ERR("DE set high failed: %d", ret);
+    }
     if (!device_is_ready(uart485_dev)) {
         LOG_ERR("UART485 not ready");
         return;
@@ -141,13 +148,23 @@ void rs485_tx_thread_entry(void *p1, void *p2, void *p3)
     }
 }
 
+void test(void)
+{
+    while (1) {
+        gpio_pin_set_dt(&de_gpio, 1);
+        k_sleep(K_MSEC(1000));
+        gpio_pin_set_dt(&de_gpio, 0);
+        k_sleep(K_MSEC(1000));
+    }
+}
+
 /* ---------- 测试线程（每5秒发送一帧） ---------- */
 void rs485_test_thread(void *p1, void *p2, void *p3)
 {
     ARG_UNUSED(p1);
     ARG_UNUSED(p2);
     ARG_UNUSED(p3);
-
+    // test();
     struct tx_msg tx_msg;
     while (1) {
         memset(&tx_msg, 0, sizeof(tx_msg));
