@@ -58,12 +58,25 @@ void timer_action_expiry_cb(struct k_timer *timer_id)
     uint8_t channel_offset = get_channel_offset_by_action_id(worker->action_id);
     if (channel_offset != 0xFF) {
         uint32_t channel = 1 << channel_offset;
-        uint8_t data[9] = {0x55, 0xAA, 0x0, 0x09, 0x00, 0x00, 0x00, 0x00};
-        setControlTxBuf(data + 4, channel);
-        data[8] = Checksum(data, 8);
-        rs485_send((const uint8_t *)data, 9 * sizeof(uint8_t));
-        LOG_INF("Action %u sent on channel %u", worker->action_id, channel);
+        struct tx_msg tx_msg;
+        memset(&tx_msg.data, 0, TX_MSG_MAX_DATA);
+        tx_msg.data[0] = 0x55;
+        tx_msg.data[1] = 0xAA;
+        tx_msg.data[2] = 0x00;
+        tx_msg.data[3] = 0x09;  
+        tx_msg.data[4] = 0x00;
+        tx_msg.data[5] = 0x00;
+        tx_msg.data[6] = 0x00;
+        tx_msg.data[7] = 0x00;
+        setControlTxBuf(tx_msg.data + 4, channel);
+        tx_msg.data[8] = Checksum(tx_msg.data, 8);
+        tx_msg.len = 9;
+        if (k_msgq_put(get_rs485_tx_msgq(), &tx_msg, K_NO_WAIT) != 0) {
+            LOG_WRN("TX queue full");
+        } else {
+            LOG_INF("reply enqueued");
+        }
     } else {
-        LOG_WRN("Invalid action ID %u", worker->action_id);
+        LOG_WRN("Invalid action_id: %u", worker->action_id);
     }
 }

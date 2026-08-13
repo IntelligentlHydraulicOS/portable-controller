@@ -36,6 +36,7 @@ K_THREAD_STACK_DEFINE(zigbee_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(zigbee_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_tx_stack, THREAD_STACK_SIZE);
+K_THREAD_STACK_DEFINE(rs485_test_stack, THREAD_STACK_SIZE);
 
 static struct k_thread bt_rx_thread_data;
 static struct k_thread bt_tx_thread_data;
@@ -43,6 +44,7 @@ static struct k_thread zigbee_rx_thread_data;
 static struct k_thread zigbee_tx_thread_data;
 static struct k_thread rs485_rx_thread_data;
 static struct k_thread rs485_tx_thread_data;
+static struct k_thread rs485_test_thread_data;
 
 static const struct device *flash_dev = DEVICE_DT_GET(FLASH_DEV_NODE);
 int mount_log_fs(void) {
@@ -101,8 +103,9 @@ int main(void) {
     LOG_INF("=== Gateway Started ===");
 
     // zigbee_init();
-    ble_init();
     rs485_init();
+    ble_init();
+
     LOG_INF("=== init done start thread ===");
 
     k_thread_create(&bt_rx_thread_data, bt_rx_stack,
@@ -140,6 +143,13 @@ int main(void) {
                     RS485_TX_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(&rs485_tx_thread_data, "RS485_TX");
 
+    k_thread_create(&rs485_test_thread_data, rs485_test_stack,
+                    K_THREAD_STACK_SIZEOF(rs485_test_stack),
+                    rs485_test_thread, NULL, NULL, NULL,
+                    RS485_TX_PRIORITY, 0, K_NO_WAIT);
+    k_thread_name_set(&rs485_test_thread_data, "RS485_TEST");
+
+    
     LOG_INF("All threads created");
 
     while (1) {
