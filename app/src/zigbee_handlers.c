@@ -65,29 +65,30 @@ static void zigbee_send(const uint8_t *data, size_t len) {
     LOG_INF("Zigbee sent %u bytes", len);
 }
 
-void zigbee_init(void) {
+int zigbee_init(void) {
     if (!gpio_is_ready_dt(&link_zig_gpio)) {
         LOG_ERR("LINK_ZIG not ready");
-        return;
+        return -1;
     }
     gpio_pin_configure_dt(&link_zig_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&link_zig_gpio, 0);
 
     if (!gpio_is_ready_dt(&mode_zig_gpio)) {
         LOG_ERR("MODE_ZIG not ready");
-        return;
+        return -1;
     }
     gpio_pin_configure_dt(&mode_zig_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&mode_zig_gpio, 0);
 
     if (!device_is_ready(uart_zigbee_dev)) {
         LOG_ERR("UART_ZIGBEE not ready");
-        return;
+        return -1;
     }
 
     uart_irq_callback_user_data_set(uart_zigbee_dev, zigbee_uart_cb, NULL);
     uart_irq_rx_enable(uart_zigbee_dev);
     LOG_INF("Zigbee init done");
+    return 0;
 }
 
 void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {

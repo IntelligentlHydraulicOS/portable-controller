@@ -57,3 +57,18 @@
     pinctrl-0 = <&uart22_default>;
     pinctrl-names = "default";
 };
+&adc {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    /* 为 P1.07 (AIN3) 配置 ADC 通道 */
+    channel@3 {                    // 1. reg 必须与通道号一致
+        reg = <3>;                 // AIN3 对应数字 3[reference:6]
+        zephyr,gain = "ADC_GAIN_1_6"; /* [reference:8]增益 1/6，可测量最高 VDD 电压 */
+        zephyr,reference = "ADC_REF_INTERNAL"; /* [reference:9]使用内部参考电压 (0.9V)[reference:10] */
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN3>; /* [reference:11]指定使用 AIN3 */
+        zephyr,resolution = <12>;  /* [reference:13]14位ADC, 常用12位分辨率 */
+    };
+};

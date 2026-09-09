@@ -12,6 +12,7 @@ uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, u
 uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 uint8_t cancel_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 uint8_t get_log_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
+
 void init_worker(worker_t *worker) {
     worker->local_id = 0;
     worker->action_id = 0;

@@ -75,28 +75,30 @@ static struct bt_nus_cb nus_listener = {
     .received = nus_received,
 };
 
-void ble_init(void) {
+int ble_init(void) {
     int err;
 
     err = bt_nus_cb_register(&nus_listener, NULL);
     if (err) {
         LOG_ERR("NUS cb reg fail: %d", err);
-        return;
+        return err;
     }
     LOG_INF("BLE init bt_nus_cb_register done");
 
     err = bt_enable(NULL);
     if (err) {
         LOG_ERR("BT enable fail: %d", err);
-        return;
+        return err;
     }
     LOG_INF("BLE init bt_enable done");
 
     err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
     if (err) {
         LOG_ERR("Adv start fail: %d", err);
+        return err;
     }
     LOG_INF("BLE init done");
+    return 0;
 }
 
 void ble_rx_thread_entry(void *p1, void *p2, void *p3) {

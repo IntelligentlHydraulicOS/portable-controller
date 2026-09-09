@@ -89,30 +89,32 @@ void rs485_send(const uint8_t *data, size_t len)
 }
 
 /* ---------- 初始化 ---------- */
-void rs485_init(void)
+int rs485_init(void)
 {
     if (!gpio_is_ready_dt(&de_gpio)) {
         LOG_ERR("DE GPIO not ready");
-        return;
+        return -ENODEV;
     }
     int ret = gpio_pin_configure_dt(&de_gpio, GPIO_OUTPUT|GPIO_PULL_UP);
     if (ret < 0) {
         LOG_ERR("DE config failed: %d", ret);
-        return;
+        return ret;
     }
     ret = gpio_pin_set_dt(&de_gpio, 1);
     if (ret < 0) {
         LOG_ERR("DE set high failed: %d", ret);
+        return ret;
     }
     if (!device_is_ready(uart485_dev)) {
         LOG_ERR("UART485 not ready");
-        return;
+        return -ENODEV;
     }
 
     rx_len = 0;
     uart_irq_callback_user_data_set(uart485_dev, rs485_uart_cb, NULL);
     uart_irq_rx_enable(uart485_dev);
     LOG_INF("RS485 init done (RX interrupt, polling TX)");
+    return 0;
 }
 
 /* ---------- 接收线程 ---------- */

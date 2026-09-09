@@ -10,6 +10,8 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/fs/littlefs.h>
 #include <zephyr/logging/log.h>
+#include "battery_monitor.h"
+#include "message.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
@@ -93,6 +95,9 @@ int mount_log_fs(void) {
 }
 
 int main(void) {
+    int ret;
+    bool is_ble_ok = false;
+    bool is_zigbee_ok = false;
     // int ret = mount_log_fs();
     // if (ret == 0) {
     //     LOG_INF("Log filesystem ready, logs will be saved.");
@@ -102,35 +107,68 @@ int main(void) {
 
     LOG_INF("=== Gateway Started ===");
 
-    // zigbee_init();
-    rs485_init();
-    ble_init();
+    ret = zigbee_init();
+    if (ret < 0) {
+        LOG_ERR("Zigbee init failed: %d", ret);
+        is_zigbee_ok = false;
+    }else{
+        is_zigbee_ok = true;
+    }
+
+    ret = rs485_init();
+    if (ret < 0) {
+        LOG_ERR("RS485 init failed: %d", ret);
+        return  -1;
+    }
+
+    ret = ble_init();
+    if (ret < 0) {
+        LOG_ERR("BLE init failed: %d", ret);
+        is_ble_ok = false;
+    }else{
+        is_ble_ok = true;
+    }
+
+    ret = battery_monitor_init();
+    if (ret < 0) {
+        LOG_ERR("Battery monitor init failed: %d", ret);
+        return -1;
+    }
+    battery_monitor_set_charge_state(false);
 
     LOG_INF("=== init done start thread ===");
 
-    k_thread_create(&bt_rx_thread_data, bt_rx_stack,
-                    K_THREAD_STACK_SIZEOF(bt_rx_stack),
-                    ble_rx_thread_entry, NULL, NULL, NULL,
-                    BT_RX_PRIORITY, 0, K_NO_WAIT);
-    k_thread_name_set(&bt_rx_thread_data, "BT_RX");
+    if (is_ble_ok) {
+        k_thread_create(&bt_rx_thread_data, bt_rx_stack,
+                        K_THREAD_STACK_SIZEOF(bt_rx_stack),
+                        ble_rx_thread_entry, NULL, NULL, NULL,
+                        BT_RX_PRIORITY, 0, K_NO_WAIT);
+        k_thread_name_set(&bt_rx_thread_data, "BT_RX");
 
-    k_thread_create(&bt_tx_thread_data, bt_tx_stack,
-                    K_THREAD_STACK_SIZEOF(bt_tx_stack),
-                    ble_tx_thread_entry, NULL, NULL, NULL,
-                    BT_TX_PRIORITY, 0, K_NO_WAIT);
-    k_thread_name_set(&bt_tx_thread_data, "BT_TX");
+        k_thread_create(&bt_tx_thread_data, bt_tx_stack,
+                        K_THREAD_STACK_SIZEOF(bt_tx_stack),
+                        ble_tx_thread_entry, NULL, NULL, NULL,
+                        BT_TX_PRIORITY, 0, K_NO_WAIT);
+        k_thread_name_set(&bt_tx_thread_data, "BT_TX");
+    }else{
+        if( is_zigbee_ok){
+            k_thread_create(&zigbee_rx_thread_data, zigbee_rx_stack,
+                            K_THREAD_STACK_SIZEOF(zigbee_rx_stack),
+                            zigbee_rx_thread_entry, NULL, NULL, NULL,
+                            ZIGBEE_RX_PRIORITY, 0, K_NO_WAIT);
+            k_thread_name_set(&zigbee_rx_thread_data, "ZIG_RX");
 
-    k_thread_create(&zigbee_rx_thread_data, zigbee_rx_stack,
-                    K_THREAD_STACK_SIZEOF(zigbee_rx_stack),
-                    zigbee_rx_thread_entry, NULL, NULL, NULL,
-                    ZIGBEE_RX_PRIORITY, 0, K_NO_WAIT);
-    k_thread_name_set(&zigbee_rx_thread_data, "ZIG_RX");
+            k_thread_create(&zigbee_tx_thread_data, zigbee_tx_stack,
+                            K_THREAD_STACK_SIZEOF(zigbee_tx_stack),
+                            zigbee_tx_thread_entry, NULL, NULL, NULL,
+                            ZIGBEE_TX_PRIORITY, 0, K_NO_WAIT);
+            k_thread_name_set(&zigbee_tx_thread_data, "ZIG_TX");
+        }else{
+            LOG_ERR("No communication interface available, exiting.");
+            return -1;
+        }
+    }
 
-    k_thread_create(&zigbee_tx_thread_data, zigbee_tx_stack,
-                    K_THREAD_STACK_SIZEOF(zigbee_tx_stack),
-                    zigbee_tx_thread_entry, NULL, NULL, NULL,
-                    ZIGBEE_TX_PRIORITY, 0, K_NO_WAIT);
-    k_thread_name_set(&zigbee_tx_thread_data, "ZIG_TX");
     k_thread_create(&rs485_rx_thread_data, rs485_rx_stack,
                     K_THREAD_STACK_SIZEOF(rs485_rx_stack),
                     rs485_rx_thread_entry, NULL, NULL, NULL,
@@ -152,8 +190,33 @@ int main(void) {
     
     LOG_INF("All threads created");
 
+    struct k_msgq *tx_msgq = NULL;
+    struct tx_msg msg;
     while (1) {
-        k_sleep(K_SECONDS(1));
+        int voltage, capacity, level;
+        ret = battery_monitor_get_voltage(&voltage);
+        if (ret == 0) {
+            ret = battery_monitor_get_capacity(&capacity);
+            if (ret == 0) {
+                battery_monitor_get_level(&level);
+                LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
+                //TODO 判断输入是蓝牙还是zigbee，选择发送通道
+                if(is_ble_ok){
+                    tx_msgq = get_ble_tx_msgq();
+                }else if(!is_ble_ok && is_zigbee_ok){
+                    tx_msgq = get_zigbee_tx_msgq();
+                }
+                memset(&msg, 0, sizeof(struct tx_msg));
+                msg.data[0] = (uint8_t)(level & 0xFF);
+                msg.len = 1;
+                if (k_msgq_put(tx_msgq, &msg, K_NO_WAIT) != 0) {
+                    LOG_WRN("Battery Info TX queue full");
+                } else {
+                    LOG_INF("Battery Info reply enqueued");
+                }
+            }
+        }
+        k_sleep(K_SECONDS(10));
     }
     return 0;
 }
