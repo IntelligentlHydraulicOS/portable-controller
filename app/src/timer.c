@@ -9,6 +9,7 @@
 
 LOG_MODULE_REGISTER(timer, LOG_LEVEL_INF);
 
+static int index = 0;
 
 void timer_heartbeat_expiry_cb(struct k_timer *timer_id)
 {
@@ -78,5 +79,48 @@ void timer_action_expiry_cb(struct k_timer *timer_id)
         }
     } else {
         LOG_WRN("Invalid action_id: %u", worker->action_id);
+    }
+}
+
+void test_timer_action_expiry_cb(struct k_timer *timer)
+{
+    ARG_UNUSED(timer);
+    struct tx_msg tx_msg;
+
+    int channel = 1 << index++;
+    memset(&tx_msg.data, 0, TX_MSG_MAX_DATA);
+    tx_msg.data[0] = 0x55;
+    tx_msg.data[1] = 0xAA;
+    tx_msg.data[2] = 0x00;
+    tx_msg.data[3] = 0x09;  
+    tx_msg.data[4] = 0x00;
+    tx_msg.data[5] = 0x00;
+    tx_msg.data[6] = 0x00;
+    tx_msg.data[7] = 0x00;
+    setControlTxBuf(tx_msg.data + 4, channel);
+    tx_msg.data[8] = Checksum(tx_msg.data, 8);
+    tx_msg.len = 9;
+    if (k_msgq_put(get_rs485_tx_msgq(), &tx_msg, K_NO_WAIT) != 0) {
+        LOG_WRN("TX queue full");
+    } else {
+        LOG_INF("reply enqueued");
+    }
+}
+
+void timer_test_thread(void *p1, void *p2, void *p3)
+{
+    ARG_UNUSED(p1);
+    ARG_UNUSED(p2);
+    ARG_UNUSED(p3);
+
+    struct k_timer test_timer;
+    k_timer_init(&test_timer, test_timer_action_expiry_cb, NULL);
+    k_timer_start(&test_timer, K_SECONDS(1), K_SECONDS(1));
+
+    while (1) {
+        if (index >= 28) {
+            index = 0; // Reset index after reaching 28
+        }
+        k_sleep(K_SECONDS(1));
     }
 }

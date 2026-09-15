@@ -12,6 +12,7 @@
 #include <zephyr/logging/log.h>
 #include "battery_monitor.h"
 #include "message.h"
+#include "timer.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
@@ -39,6 +40,8 @@ K_THREAD_STACK_DEFINE(zigbee_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_test_stack, THREAD_STACK_SIZE);
+K_THREAD_STACK_DEFINE(timer_test_stack, THREAD_STACK_SIZE);
+
 
 static struct k_thread bt_rx_thread_data;
 static struct k_thread bt_tx_thread_data;
@@ -47,6 +50,7 @@ static struct k_thread zigbee_tx_thread_data;
 static struct k_thread rs485_rx_thread_data;
 static struct k_thread rs485_tx_thread_data;
 static struct k_thread rs485_test_thread_data;
+static struct k_thread timer_test_thread_data;
 
 static const struct device *flash_dev = DEVICE_DT_GET(FLASH_DEV_NODE);
 int mount_log_fs(void) {
@@ -233,7 +237,12 @@ int main(void) {
     //                 RS485_TX_PRIORITY, 0, K_NO_WAIT);
     // k_thread_name_set(&rs485_test_thread_data, "RS485_TEST");
 
-    
+    k_thread_create(&timer_test_thread_data, timer_test_stack,
+                    K_THREAD_STACK_SIZEOF(timer_test_stack),
+                    timer_test_thread, NULL, NULL, NULL,
+                    RS485_TX_PRIORITY, 0, K_NO_WAIT);
+    k_thread_name_set(&timer_test_thread_data, "TIMER_TEST");
+
     LOG_INF("All threads created");
 
     struct k_msgq *tx_msgq = NULL;
