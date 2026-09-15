@@ -94,6 +94,52 @@ int mount_log_fs(void) {
     return rc;
 }
 
+#include <zephyr/drivers/clock_control/nrf_clock_control.h>
+#include <zephyr/sys/notify.h>
+
+static struct onoff_client hfxo_cli;
+
+static int lock_hfxo_permanently(void)
+{
+    struct onoff_manager *clk_mgr;
+    int ret;
+
+    clk_mgr = z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
+    if (!clk_mgr) {
+        LOG_ERR("Unable to get HF clock manager");
+        return -ENXIO;
+    }
+
+    sys_notify_init_spinwait(&hfxo_cli.notify);
+    ret = onoff_request(clk_mgr, &hfxo_cli);
+    if (ret < 0) {
+        LOG_ERR("HFXO request failed: %d", ret);
+        return ret;
+    }
+
+    while (sys_notify_fetch_result(&hfxo_cli.notify, &ret) != 0) {
+        k_busy_wait(100);
+    }
+    if (ret < 0) {
+        LOG_ERR("HFXO start failed: %d", ret);
+        return ret;
+    }
+
+    NRF_CLOCK->TASKS_XOSTART = 1;
+    uint32_t timeout = 10000;
+    while (NRF_CLOCK->EVENTS_XOSTARTED == 0 && timeout--) {
+        k_busy_wait(1);
+    }
+    if (NRF_CLOCK->EVENTS_XOSTARTED == 0) {
+        LOG_ERR("HFXO start timeout");
+        return -ETIMEDOUT;
+    }
+    NRF_CLOCK->EVENTS_XOSTARTED = 0;
+
+    LOG_INF("HFXO locked permanently");
+    return 0;
+}
+
 int main(void) {
     int ret;
     bool is_ble_ok = false;
@@ -106,7 +152,7 @@ int main(void) {
     // }
 
     LOG_INF("=== Gateway Started ===");
-
+    lock_hfxo_permanently();
     ret = zigbee_init();
     if (ret < 0) {
         LOG_ERR("Zigbee init failed: %d", ret);
@@ -181,11 +227,11 @@ int main(void) {
                     RS485_TX_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(&rs485_tx_thread_data, "RS485_TX");
 
-    k_thread_create(&rs485_test_thread_data, rs485_test_stack,
-                    K_THREAD_STACK_SIZEOF(rs485_test_stack),
-                    rs485_test_thread, NULL, NULL, NULL,
-                    RS485_TX_PRIORITY, 0, K_NO_WAIT);
-    k_thread_name_set(&rs485_test_thread_data, "RS485_TEST");
+    // k_thread_create(&rs485_test_thread_data, rs485_test_stack,
+    //                 K_THREAD_STACK_SIZEOF(rs485_test_stack),
+    //                 rs485_test_thread, NULL, NULL, NULL,
+    //                 RS485_TX_PRIORITY, 0, K_NO_WAIT);
+    // k_thread_name_set(&rs485_test_thread_data, "RS485_TEST");
 
     
     LOG_INF("All threads created");
@@ -200,7 +246,6 @@ int main(void) {
             if (ret == 0) {
                 battery_monitor_get_level(&level);
                 LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
-                //TODO 判断输入是蓝牙还是zigbee，选择发送通道
                 if(is_ble_ok){
                     tx_msgq = get_ble_tx_msgq();
                 }else if(!is_ble_ok && is_zigbee_ok){

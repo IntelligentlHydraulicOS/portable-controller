@@ -2,34 +2,34 @@
 #include <string.h>
 
 static const action_mapping_t g_action_mapping[] = {
-    {0,  1, "J5_K1"},
-    {1,  1, "J5_K2"},
-    {2,  1, "J3_K1"},
-    {3,  1, "J3_K2"},
-    {4,  1, "J1_K1"},
-    {5,  1, "J1_K2"},
-    {6,  1, "J11_K1"},
-    {7,  1, "J11_K2"},
-    {8,  1, "J9_K1"},
-    {9,  1, "J9_K2"},
-    {10, 1, "J7_K1"},
-    {11, 1, "J7_K2"},
-    {12, 1, "J6_K1"},
-    {13, 1, "J6_K2"},
-    {14, 1, "J4_K1"},
-    {15, 1, "J4_K2"},
-    {16, 1, "J2_K1"},
-    {17, 1, "J2_K2"},
-    {18, 1, "J12_K1"},
-    {19, 1, "J12_K2"},
-    {20, 1, "J10_K1"},
-    {21, 1, "J10_K2"},
-    {22, 1, "J8_K1"},
-    {23, 1, "J8_K2"},
-    {24, 1, "J13_K1"},
-    {25, 1, "J13_K2"},
-    {26, 1, "J14_K1"},
-    {27, 1, "J14_K2"},
+    {1,  ACTION_J5_K1, "J5_K1"},
+    {2,  ACTION_J5_K2, "J5_K2"},
+    {3,  ACTION_J3_K3, "J3_K3"},
+    {4,  ACTION_J3_K4, "J3_K4"},
+    {5,  ACTION_J1_K5, "J1_K5"},
+    {6,  ACTION_J1_K6, "J1_K6"},
+    {7,  ACTION_J11_K7, "J11_K7"},
+    {8,  ACTION_J11_K8, "J11_K8"},
+    {9,  ACTION_J9_K9, "J9_K9"},
+    {10, ACTION_J9_K10, "J9_K10"},
+    {11, ACTION_J7_K11, "J7_K11"},
+    {12, ACTION_J7_K12, "J7_K12"},
+    {13, ACTION_J6_K13, "J6_K13"},
+    {14, ACTION_J6_K14, "J6_K14"},
+    {15, ACTION_J4_K15, "J4_K15"},
+    {16, ACTION_J4_K16, "J4_K16"},
+    {17, ACTION_J2_K17, "J2_K17"},
+    {18, ACTION_J2_K18, "J2_K18"},
+    {19, ACTION_J12_K19, "J12_K19"},
+    {20, ACTION_J12_K20, "J12_K20"},
+    {21, ACTION_J10_K21, "J10_K21"},
+    {22, ACTION_J10_K22, "J10_K22"},
+    {23, ACTION_J8_K23, "J8_K23"},
+    {24, ACTION_J8_K24, "J8_K24"},
+    {25, ACTION_J13_K25, "J13_K25"},
+    {26, ACTION_J13_K26, "J13_K26"},
+    {27, ACTION_J14_K27, "J14_K27"},
+    {28, ACTION_J14_K28, "J14_K28"},
 };
 
 #define ACTION_MAPPING_COUNT  (sizeof(g_action_mapping) / sizeof(action_mapping_t))
@@ -51,7 +51,7 @@ uint8_t get_channel_offset_by_name(const char *s)
     return 0xFF;
 }
 
-uint8_t get_channel_offset_by_action_id(uint8_t action_id)
+uint8_t get_channel_offset_by_action_id(uint32_t action_id)
 {
     for (uint8_t i = 0; i < ACTION_MAPPING_COUNT; i++)
     {

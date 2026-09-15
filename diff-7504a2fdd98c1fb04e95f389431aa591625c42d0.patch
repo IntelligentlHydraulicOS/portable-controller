@@ -1,0 +1,655 @@
+diff --git a/app/app.overlay b/app/app.overlay
+index b7b3413..e2659cc 100644
+--- a/app/app.overlay
++++ b/app/app.overlay
+@@ -1,74 +1,84 @@
+-#include <dt-bindings/pinctrl/nrf-pinctrl.h>
++/*
++ * PTR54L15X (nRF54L15) 设备树覆盖文件
++ * 目的：释放 P1.06 作为 RS-485 DE 控制引脚，并将控制台日志输出到 RTT
++ */
+ 
++#include <dt-bindings/pinctrl/nrf-pinctrl.h>
++#include <dt-bindings/gpio/gpio.h>
+ 
+ / {
+-    /* RS-485 方向控制引脚 (DE/RE) - P1.06 */
+-    rs485_ctrl: rs485-ctrl {
+-        compatible = "gpio-leds";
+-        de: de {
+-            gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+-            label = "RS485 DE";
+-        };
+-    };
+-
+-    /* Zigbee 控制引脚 */
+-    zigbee_ctrl: zigbee-ctrl {
+-        compatible = "gpio-leds";
+-        link_zig: link_zig {
+-            gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+-            label = "Zigbee Link";
+-        };
+-        mode_zig: mode_zig {
+-            gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+-            label = "Zigbee Mode";
+-        };
++    /* ADC 采样通道：P1.07 (AIN3) */
++    zephyr,user {
++        io-channels = <&adc 3>;
+     };
++};
+ 
+-    /* 自定义 pinctrl */
+-    my_pinctrl: pinctrl {
+-        compatible = "nordic,nrf-pinctrl";
+-        uart21_default: uart21_default {
+-            group1 {
+-                psels = <NRF_PSEL(UART_TX, 1, 4)>,
+-                        <NRF_PSEL(UART_RX, 1, 5)>;
+-            };
+-        };
+-        uart22_default: uart22_default {
+-            group1 {
+-                psels = <NRF_PSEL(UART_TX, 1, 12)>,
+-                        <NRF_PSEL(UART_RX, 1, 13)>;
+-            };
+-        };
+-    };
++/* ================================================================
++ * 关键：禁用 uart20，彻底释放 P1.06 (RTS) 和 P1.07 (CTS)
++ * ================================================================ */
++&uart20 {
++    status = "disabled";
+ };
+ 
+-/* RS-485 UART - 不再设置 rts-gpios */
++/* ================================================================
++ * 注意：不再将 uart21 或 uart22 用作 console/shell
++ * 控制台日志将通过 RTT 输出，由 prj.conf 中的 Kconfig 配置
++ * ================================================================ */
++
++/* ================================================================
++ * RS-485 UART (uart21)
++ * ================================================================ */
+ &uart21 {
+     status = "okay";
+     current-speed = <115200>;
++    interrupts = < 0xc7 0x0 >; // 将优先级从 0x1 改为 0x0
++    clocks = <&hfpll>;  /* 强制使用 PLL（源自 HFXO） */
+     pinctrl-0 = <&uart21_default>;
+     pinctrl-names = "default";
+ };
+ 
+-/* Zigbee UART */
++&pinctrl {
++    uart21_default: uart21_default {
++        group1 {
++            psels = <NRF_PSEL(UART_TX, 1, 4)>,
++                    <NRF_PSEL(UART_RX, 1, 5)>;
++        };
++    };
++};
++
++/* ================================================================
++ * Zigbee UART (uart22)
++ * ================================================================ */
+ &uart22 {
+     status = "okay";
+     current-speed = <115200>;
+     pinctrl-0 = <&uart22_default>;
+     pinctrl-names = "default";
+ };
++
++&pinctrl {
++    uart22_default: uart22_default {
++        group1 {
++            psels = <NRF_PSEL(UART_TX, 1, 12)>,
++                    <NRF_PSEL(UART_RX, 1, 13)>;
++        };
++    };
++};
++
++/* ================================================================
++ * ADC 配置：P1.07 (AIN3)
++ * ================================================================ */
+ &adc {
+     status = "okay";
+     #address-cells = <1>;
+     #size-cells = <0>;
+ 
+-    /* 为 P1.07 (AIN3) 配置 ADC 通道 */
+-    channel@3 {                    // 1. reg 必须与通道号一致
+-        reg = <3>;                 // AIN3 对应数字 3[reference:6]
+-        zephyr,gain = "ADC_GAIN_1_6"; /* [reference:8]增益 1/6，可测量最高 VDD 电压 */
+-        zephyr,reference = "ADC_REF_INTERNAL"; /* [reference:9]使用内部参考电压 (0.9V)[reference:10] */
++    channel@3 {
++        reg = <3>;
++        zephyr,gain = "ADC_GAIN_1_6";
++        zephyr,reference = "ADC_REF_INTERNAL";
+         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+-        zephyr,input-positive = <NRF_SAADC_AIN3>; /* [reference:11]指定使用 AIN3 */
+-        zephyr,resolution = <12>;  /* [reference:13]14位ADC, 常用12位分辨率 */
++        zephyr,input-positive = <NRF_SAADC_AIN3>;
++        zephyr,resolution = <12>;
+     };
+-};
+\ No newline at end of file
++};
+diff --git a/app/prj.conf b/app/prj.conf
+index 8f77e42..e96c864 100644
+--- a/app/prj.conf
++++ b/app/prj.conf
+@@ -1,53 +1,63 @@
+ # ========== UART 配置 ==========
+ CONFIG_SERIAL=y
+ CONFIG_UART_INTERRUPT_DRIVEN=y
+-# CONFIG_UART_ASYNC_API=y
+ CONFIG_GPIO=y
+ CONFIG_PRINTK=y
+ 
+ CONFIG_ISR_STACK_SIZE=4096
+-# 启用控制台
++
++# ========== Console 通过 RTT 输出 ==========
+ CONFIG_CONSOLE=y
+-CONFIG_UART_CONSOLE=y
++CONFIG_RTT_CONSOLE=y
++CONFIG_UART_CONSOLE=n
++CONFIG_NRFX_POWER=y
+ 
+-# Bluetooth 配置
++# ========== Bluetooth 配置 ==========
+ CONFIG_BT=y
+ CONFIG_BT_PERIPHERAL=y
+ CONFIG_BT_DEVICE_NAME="Portable Controller"
+ CONFIG_BT_DEVICE_APPEARANCE=0
+ CONFIG_BT_ZEPHYR_NUS=y
+-# 必要的底层配置
+ CONFIG_BT_GATT_CLIENT=y
+-# NUS 服务
+ CONFIG_BT_NUS=y
+ 
+ # ========== Logging ==========
+ CONFIG_LOG=y
+ CONFIG_LOG_DEFAULT_LEVEL=3
+-CONFIG_LOG_BACKEND_RTT=y
+ CONFIG_USE_SEGGER_RTT=y
+-# CONFIG_LOG_BACKEND_UART=y
++CONFIG_LOG_BACKEND_RTT=y
++CONFIG_LOG_BACKEND_RTT_BUFFER=0
++CONFIG_LOG_BACKEND_UART=n
+ 
+-# 启用 LittleFS
++# ========== Shell 通过 RTT 输出 ==========
++CONFIG_SHELL=y
++CONFIG_SHELL_BACKEND_SERIAL=n
++CONFIG_SHELL_BACKEND_RTT=y
++CONFIG_SHELL_BACKEND_RTT_BUFFER=1
++
++# ========== LittleFS 文件系统 ==========
+ CONFIG_FILE_SYSTEM=y
+ CONFIG_FILE_SYSTEM_LITTLEFS=y
+ CONFIG_FLASH=y
+ CONFIG_FLASH_MAP=y
+ 
+-# 启用日志和文件系统后端
++# ========== 日志文件系统后端 ==========
+ CONFIG_LOG_BACKEND_FS=y
+ CONFIG_LOG_BACKEND_FS_AUTOSTART=y
+ CONFIG_LOG_BACKEND_FS_DIR="/lfs"
+ CONFIG_LOG_BACKEND_FS_FILE_SIZE=4096
+ CONFIG_LOG_BACKEND_FS_OVERWRITE=y
+ CONFIG_LOG_BACKEND_FS_FILE_PREFIX="log."
+-# CONFIG_LOG_BACKEND_FS_APPEND=y
+ CONFIG_LOG_PROCESS_THREAD_STACK_SIZE=4096
+-CONFIG_FILE_SYSTEM_MKFS=y
+ 
+-# 使用 deferred 模式，避免在中断上下文执行耗时操作
++# ========== 日志模式 ==========
+ CONFIG_LOG_MODE_DEFERRED=y
+ CONFIG_LOG_BACKEND_FORMAT_TIMESTAMP=y
+ 
+-#启用 ADC
+-CONFIG_ADC=y
+\ No newline at end of file
++# ========== ADC ==========
++CONFIG_ADC=y
++
++CONFIG_CLOCK_CONTROL=y
++CONFIG_CLOCK_CONTROL_NRF=y
++CONFIG_UART_INTERRUPT_DRIVEN=y
++CONFIG_UART_NRFX_UARTE_HFXO_ON_ACTIVE=y
+\ No newline at end of file
+diff --git a/app/src/main.c b/app/src/main.c
+index f82898a..38e91e8 100644
+--- a/app/src/main.c
++++ b/app/src/main.c
+@@ -94,6 +94,52 @@ int mount_log_fs(void) {
+     return rc;
+ }
+ 
++#include <zephyr/drivers/clock_control/nrf_clock_control.h>
++#include <zephyr/sys/notify.h>
++
++static struct onoff_client hfxo_cli;
++
++static int lock_hfxo_permanently(void)
++{
++    struct onoff_manager *clk_mgr;
++    int ret;
++
++    clk_mgr = z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
++    if (!clk_mgr) {
++        LOG_ERR("Unable to get HF clock manager");
++        return -ENXIO;
++    }
++
++    sys_notify_init_spinwait(&hfxo_cli.notify);
++    ret = onoff_request(clk_mgr, &hfxo_cli);
++    if (ret < 0) {
++        LOG_ERR("HFXO request failed: %d", ret);
++        return ret;
++    }
++
++    while (sys_notify_fetch_result(&hfxo_cli.notify, &ret) != 0) {
++        k_busy_wait(100);
++    }
++    if (ret < 0) {
++        LOG_ERR("HFXO start failed: %d", ret);
++        return ret;
++    }
++
++    NRF_CLOCK->TASKS_XOSTART = 1;
++    uint32_t timeout = 10000;
++    while (NRF_CLOCK->EVENTS_XOSTARTED == 0 && timeout--) {
++        k_busy_wait(1);
++    }
++    if (NRF_CLOCK->EVENTS_XOSTARTED == 0) {
++        LOG_ERR("HFXO start timeout");
++        return -ETIMEDOUT;
++    }
++    NRF_CLOCK->EVENTS_XOSTARTED = 0;
++
++    LOG_INF("HFXO locked permanently");
++    return 0;
++}
++
+ int main(void) {
+     int ret;
+     bool is_ble_ok = false;
+@@ -106,7 +152,7 @@ int main(void) {
+     // }
+ 
+     LOG_INF("=== Gateway Started ===");
+-
++    lock_hfxo_permanently();
+     ret = zigbee_init();
+     if (ret < 0) {
+         LOG_ERR("Zigbee init failed: %d", ret);
+diff --git a/app/src/rs485_handlers.c b/app/src/rs485_handlers.c
+index 423ecb9..6bd5872 100644
+--- a/app/src/rs485_handlers.c
++++ b/app/src/rs485_handlers.c
+@@ -11,15 +11,22 @@
+ LOG_MODULE_REGISTER(rs485, LOG_LEVEL_INF);
+ 
+ #define UART485_NODE DT_NODELABEL(uart21)
+-#define DE_NODE DT_NODELABEL(de)
++#define RS485_DE_GPIO_CTRL_NODE DT_NODELABEL(gpio1)
++#define RS485_DE_PIN            6
+ 
+ static const struct device *uart485_dev = DEVICE_DT_GET(UART485_NODE);
+-static const struct gpio_dt_spec de_gpio = GPIO_DT_SPEC_GET(DE_NODE, gpios);
++static const struct device *rs485_de_dev = DEVICE_DT_GET(RS485_DE_GPIO_CTRL_NODE);
+ 
+-/* 接收缓冲区（静态，跨中断保持） */
++/* 接收缓冲区 */
+ static uint8_t rx_buf[TX_MSG_MAX_DATA];
+ static size_t rx_len = 0;
+ 
++/* 发送完成标志 */
++static volatile bool tx_done = false;
++
++/* 帧超时定时器：用于判断一帧接收结束 */
++static struct k_timer rs485_rx_timer;
++
+ K_MSGQ_DEFINE(rs485_rx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
+ K_MSGQ_DEFINE(rs485_tx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
+ 
+@@ -28,96 +35,125 @@ struct k_msgq *get_rs485_tx_msgq(void)
+     return &rs485_tx_msgq;
+ }
+ 
+-/* ---------- 中断接收回调 ---------- */
++/* 帧超时处理：将接收缓冲区的数据作为一个完整帧放入队列 */
++static void rs485_rx_timeout_handler(struct k_timer *timer)
++{
++    ARG_UNUSED(timer);
++
++    if (rx_len > 0) {
++        struct tx_msg msg;
++        msg.len = rx_len;
++        memcpy(msg.data, rx_buf, rx_len);
++        if (k_msgq_put(&rs485_rx_msgq, &msg, K_NO_WAIT) != 0) {
++            LOG_WRN("RS485 RX queue full");
++        }
++        rx_len = 0;
++    }
++}
++
++/* UART 中断回调：处理接收和发送完成 */
+ static void rs485_uart_cb(const struct device *dev, void *user_data)
+ {
+     ARG_UNUSED(user_data);
+ 
+-    uint8_t buf[64];
+-    int len;
++    uart_irq_update(dev);
++     while(uart_irq_is_pending(dev)) {
++        /* 检查帧错误、奇偶错误等 */
++        int err = uart_err_check(dev);
++        if (err) {
++            LOG_WRN("RS485 UART error: 0x%02X, discarding frame", err);
++            rx_len = 0;
++            k_timer_stop(&rs485_rx_timer);
++            continue;
++        }
+ 
+-    while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
++        /* 接收处理 */
+         if (uart_irq_rx_ready(dev)) {
+-            len = uart_fifo_read(dev, buf, sizeof(buf));
++            uint8_t buf[64];
++            int len = uart_fifo_read(dev, buf, sizeof(buf));
+             if (len > 0) {
+                 if (rx_len + len > TX_MSG_MAX_DATA) {
+                     LOG_WRN("RS485 RX overflow, discarding old frame");
+-                    rx_len = 0;  // 溢出则丢弃当前帧
++                    rx_len = 0;
+                 }
+                 memcpy(rx_buf + rx_len, buf, len);
+                 rx_len += len;
++
++                /* 每收到数据就重置超时定时器，5ms 内无新数据则认为一帧结束 */
++                k_timer_start(&rs485_rx_timer, K_MSEC(5), K_NO_WAIT);
+             }
+         }
+-    }
+ 
+-    /* 检查是否收到结束标志（'\r' 或 '\n'），也可以添加超时机制 */
+-    // if (rx_len > 0 && (rx_buf[rx_len-1] == '\n' || rx_buf[rx_len-1] == '\r')) {
+-    if (rx_len > 0) {
+-        struct tx_msg msg;
+-        msg.len = rx_len;
+-        memcpy(msg.data, rx_buf, rx_len);
+-        if (k_msgq_put(&rs485_rx_msgq, &msg, K_NO_WAIT) != 0) {
+-            LOG_WRN("RS485 RX queue full");
++        /* 发送完成处理：硬件已发送完最后一个停止位 */
++        if (uart_irq_tx_complete(dev)) {
++            uart_irq_tx_disable(dev);                          /* 关闭 TX 中断 */
++            gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 0);       /* 拉低 DE，切回接收 */
++            tx_done = true;
++            LOG_INF("TX complete, DE pulled low");
+         }
+-        rx_len = 0;  // 清空缓冲区，准备接收下一帧
+     }
+ }
+ 
+-/* ---------- 发送函数（轮询 + 精确等待） ---------- */
++/* 发送函数：使用中断方式等待发送完成后再切换 DE */
+ void rs485_send(const uint8_t *data, size_t len)
+ {
+     if (!device_is_ready(uart485_dev) || !data || len == 0) {
+         return;
+     }
+ 
+-    // gpio_pin_set_dt(&de_gpio, 1);          /* 发送模式 */
++    tx_done = false;
+ 
++    /* 拉高 DE，进入发送模式 */
++    gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 1);
++
++    /* 将数据写入 FIFO（轮询方式，快速填充） */
+     for (size_t i = 0; i < len; i++) {
+         uart_poll_out(uart485_dev, data[i]);
+     }
+-    /* 可选：如果你需要添加结束符，就保留；否则去掉下面两行 */
+-    // uart_poll_out(uart485_dev, '\r');
+-    // uart_poll_out(uart485_dev, '\n');
+ 
+-    /* 动态等待：确保所有字节（含结束符）均已发出 */
+-    uint32_t total_bytes = len; /* 如果加了结束符，需要 +2 */
+-    uint32_t byte_time_us = (10 * 1000000) / 115200;  // ≈86.8us
+-    uint32_t wait_us = total_bytes * byte_time_us + 100; // 增加安全余量
+-    k_busy_wait(wait_us);
++    /* 使能 TX 完成中断，等待硬件真正发送完毕 */
++    uart_irq_tx_enable(uart485_dev);
+ 
+-    // gpio_pin_set_dt(&de_gpio, 0);           /* 切回接收 */
++    /* 阻塞等待，直到发送完成中断触发并拉低 DE */
++    while (!tx_done) {
++        k_sleep(K_MSEC(1));
++    }
+ }
+ 
+-/* ---------- 初始化 ---------- */
++/* 初始化 */
+ int rs485_init(void)
+ {
+-    if (!gpio_is_ready_dt(&de_gpio)) {
+-        LOG_ERR("DE GPIO not ready");
++    if (!device_is_ready(rs485_de_dev)) {
++        LOG_ERR("RS485 DE GPIO controller not ready");
+         return -ENODEV;
+     }
+-    int ret = gpio_pin_configure_dt(&de_gpio, GPIO_OUTPUT|GPIO_PULL_UP);
+-    if (ret < 0) {
+-        LOG_ERR("DE config failed: %d", ret);
+-        return ret;
+-    }
+-    ret = gpio_pin_set_dt(&de_gpio, 1);
++
++    int ret = gpio_pin_configure(rs485_de_dev, RS485_DE_PIN,
++                                 GPIO_OUTPUT_INACTIVE | GPIO_PULL_UP);
+     if (ret < 0) {
+-        LOG_ERR("DE set high failed: %d", ret);
++        LOG_ERR("DE pin config failed: %d", ret);
+         return ret;
+     }
++
+     if (!device_is_ready(uart485_dev)) {
+         LOG_ERR("UART485 not ready");
+         return -ENODEV;
+     }
+ 
++    /* 初始化帧超时定时器 */
++    k_timer_init(&rs485_rx_timer, rs485_rx_timeout_handler, NULL);
++
+     rx_len = 0;
++    tx_done = false;
++
+     uart_irq_callback_user_data_set(uart485_dev, rs485_uart_cb, NULL);
+     uart_irq_rx_enable(uart485_dev);
+-    LOG_INF("RS485 init done (RX interrupt, polling TX)");
++
++    LOG_INF("RS485 init done (interrupt driven, DE controlled by TX complete)");
+     return 0;
+ }
+ 
+-/* ---------- 接收线程 ---------- */
++/* 接收线程 */
+ void rs485_rx_thread_entry(void *p1, void *p2, void *p3)
+ {
+     ARG_UNUSED(p1);
+@@ -133,7 +169,7 @@ void rs485_rx_thread_entry(void *p1, void *p2, void *p3)
+     }
+ }
+ 
+-/* ---------- 发送线程 ---------- */
++/* 发送线程 */
+ void rs485_tx_thread_entry(void *p1, void *p2, void *p3)
+ {
+     ARG_UNUSED(p1);
+@@ -153,9 +189,9 @@ void rs485_tx_thread_entry(void *p1, void *p2, void *p3)
+ void test(void)
+ {
+     while (1) {
+-        gpio_pin_set_dt(&de_gpio, 1);
++        gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 1);
+         k_sleep(K_MSEC(1000));
+-        gpio_pin_set_dt(&de_gpio, 0);
++        gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 0);
+         k_sleep(K_MSEC(1000));
+     }
+ }
+@@ -166,7 +202,7 @@ void rs485_test_thread(void *p1, void *p2, void *p3)
+     ARG_UNUSED(p1);
+     ARG_UNUSED(p2);
+     ARG_UNUSED(p3);
+-    // test();
++    test();
+     struct tx_msg tx_msg;
+     while (1) {
+         memset(&tx_msg, 0, sizeof(tx_msg));
+diff --git a/app/src/zigbee_handlers.c b/app/src/zigbee_handlers.c
+index 87a5a3c..4cefef7 100644
+--- a/app/src/zigbee_handlers.c
++++ b/app/src/zigbee_handlers.c
+@@ -9,14 +9,16 @@
+ 
+ LOG_MODULE_REGISTER(zigbee, LOG_LEVEL_INF);
+ 
++/* ---------- UART 设备定义 ---------- */
+ #define UART_ZIGBEE_NODE DT_NODELABEL(uart22)
+-#define LINK_ZIG_NODE DT_NODELABEL(link_zig)
+-#define MODE_ZIG_NODE DT_NODELABEL(mode_zig)
+-
+ static const struct device *uart_zigbee_dev = DEVICE_DT_GET(UART_ZIGBEE_NODE);
+-static const struct gpio_dt_spec link_zig_gpio = GPIO_DT_SPEC_GET(LINK_ZIG_NODE, gpios);
+-static const struct gpio_dt_spec mode_zig_gpio = GPIO_DT_SPEC_GET(MODE_ZIG_NODE, gpios);
+ 
++/* ---------- GPIO 直接定义（P1.14 / P1.02） ---------- */
++#define ZIGBEE_GPIO_CTRL_NODE DT_NODELABEL(gpio1)
++#define LINK_ZIG_PIN          14   /* P1.14 */
++#define MODE_ZIG_PIN          2    /* P1.02 */
++
++static const struct device *zigbee_gpio_dev = DEVICE_DT_GET(ZIGBEE_GPIO_CTRL_NODE);
+ 
+ K_MSGQ_DEFINE(zigbee_rx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
+ K_MSGQ_DEFINE(zigbee_tx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
+@@ -25,6 +27,7 @@ struct k_msgq *get_zigbee_tx_msgq(void) {
+     return &zigbee_tx_msgq;
+ }
+ 
++/* ---------- 中断接收回调 ---------- */
+ static void zigbee_uart_cb(const struct device *dev, void *user_data) {
+     ARG_UNUSED(user_data);
+ 
+@@ -33,12 +36,16 @@ static void zigbee_uart_cb(const struct device *dev, void *user_data) {
+     struct tx_msg msg;
+     size_t total_len = 0;
+ 
+-    while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
++    memset(&msg, 0, sizeof(msg));
++
++    uart_irq_update(dev);
++     while(uart_irq_is_pending(dev)) {
+         if (uart_irq_rx_ready(dev)) {
+-            len = uart_fifo_read(dev, buf, 64);
++            len = uart_fifo_read(dev, buf, sizeof(buf));
+             if (len > 0) {
+                 if (total_len + len > TX_MSG_MAX_DATA) {
+-                    LOG_WRN("Zigbee RX overflow");
++                    LOG_WRN("Zigbee RX overflow, discarding");
++                    total_len = 0;
+                     break;
+                 }
+                 memcpy(msg.data + total_len, buf, len);
+@@ -55,6 +62,7 @@ static void zigbee_uart_cb(const struct device *dev, void *user_data) {
+     }
+ }
+ 
++/* ---------- 发送函数 ---------- */
+ static void zigbee_send(const uint8_t *data, size_t len) {
+     if (!device_is_ready(uart_zigbee_dev) || !data || len == 0) {
+         return;
+@@ -65,24 +73,32 @@ static void zigbee_send(const uint8_t *data, size_t len) {
+     LOG_INF("Zigbee sent %u bytes", len);
+ }
+ 
++/* ---------- 初始化 ---------- */
+ int zigbee_init(void) {
+-    if (!gpio_is_ready_dt(&link_zig_gpio)) {
+-        LOG_ERR("LINK_ZIG not ready");
+-        return -1;
++    if (!device_is_ready(zigbee_gpio_dev)) {
++        LOG_ERR("Zigbee GPIO controller not ready");
++        return -ENODEV;
+     }
+-    gpio_pin_configure_dt(&link_zig_gpio, GPIO_OUTPUT);
+-    gpio_pin_set_dt(&link_zig_gpio, 0);
+ 
+-    if (!gpio_is_ready_dt(&mode_zig_gpio)) {
+-        LOG_ERR("MODE_ZIG not ready");
+-        return -1;
++    /* 配置 LINK_ZIG 引脚为输出，初始低电平 */
++    int ret = gpio_pin_configure(zigbee_gpio_dev, LINK_ZIG_PIN,
++                                 GPIO_OUTPUT_INACTIVE);
++    if (ret < 0) {
++        LOG_ERR("LINK_ZIG config failed: %d", ret);
++        return ret;
++    }
++
++    /* 配置 MODE_ZIG 引脚为输出，初始低电平 */
++    ret = gpio_pin_configure(zigbee_gpio_dev, MODE_ZIG_PIN,
++                             GPIO_OUTPUT_INACTIVE);
++    if (ret < 0) {
++        LOG_ERR("MODE_ZIG config failed: %d", ret);
++        return ret;
+     }
+-    gpio_pin_configure_dt(&mode_zig_gpio, GPIO_OUTPUT);
+-    gpio_pin_set_dt(&mode_zig_gpio, 0);
+ 
+     if (!device_is_ready(uart_zigbee_dev)) {
+         LOG_ERR("UART_ZIGBEE not ready");
+-        return -1;
++        return -ENODEV;
+     }
+ 
+     uart_irq_callback_user_data_set(uart_zigbee_dev, zigbee_uart_cb, NULL);
+@@ -91,6 +107,7 @@ int zigbee_init(void) {
+     return 0;
+ }
+ 
++/* ---------- 接收线程 ---------- */
+ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
+     ARG_UNUSED(p1);
+     ARG_UNUSED(p2);
+@@ -113,7 +130,7 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
+ 
+         int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
+ 
+-        if (ret == 1  && reply_len > 0) {
++        if (ret == 1 && reply_len > 0) {
+             struct tx_msg tx_msg;
+             memset(&tx_msg, 0, sizeof(tx_msg));
+             memcpy(tx_msg.data, reply, reply_len);
+@@ -125,9 +142,11 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
+             }
+         }
+     }
++    /* 不可达，保留占位 */
+     free_worker(worker);
+ }
+ 
++/* ---------- 发送线程 ---------- */
+ void zigbee_tx_thread_entry(void *p1, void *p2, void *p3) {
+     ARG_UNUSED(p1);
+     ARG_UNUSED(p2);
+@@ -144,4 +163,4 @@ void zigbee_tx_thread_entry(void *p1, void *p2, void *p3) {
+         LOG_INF("Zigbee sent %u bytes", msg.len);
+         LOG_HEXDUMP_INF(msg.data, msg.len, "Zigbee Sent:");
+     }
+-}
++}
+\ No newline at end of file

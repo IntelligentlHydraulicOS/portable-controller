@@ -1,74 +1,84 @@
-#include <dt-bindings/pinctrl/nrf-pinctrl.h>
+/*
+ * PTR54L15X (nRF54L15) 设备树覆盖文件
+ * 目的：释放 P1.06 作为 RS-485 DE 控制引脚，并将控制台日志输出到 RTT
+ */
 
+#include <dt-bindings/pinctrl/nrf-pinctrl.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
-    /* RS-485 方向控制引脚 (DE/RE) - P1.06 */
-    rs485_ctrl: rs485-ctrl {
-        compatible = "gpio-leds";
-        de: de {
-            gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
-            label = "RS485 DE";
-        };
-    };
-
-    /* Zigbee 控制引脚 */
-    zigbee_ctrl: zigbee-ctrl {
-        compatible = "gpio-leds";
-        link_zig: link_zig {
-            gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;
-            label = "Zigbee Link";
-        };
-        mode_zig: mode_zig {
-            gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
-            label = "Zigbee Mode";
-        };
-    };
-
-    /* 自定义 pinctrl */
-    my_pinctrl: pinctrl {
-        compatible = "nordic,nrf-pinctrl";
-        uart21_default: uart21_default {
-            group1 {
-                psels = <NRF_PSEL(UART_TX, 1, 4)>,
-                        <NRF_PSEL(UART_RX, 1, 5)>;
-            };
-        };
-        uart22_default: uart22_default {
-            group1 {
-                psels = <NRF_PSEL(UART_TX, 1, 12)>,
-                        <NRF_PSEL(UART_RX, 1, 13)>;
-            };
-        };
+    /* ADC 采样通道：P1.07 (AIN3) */
+    zephyr,user {
+        io-channels = <&adc 3>;
     };
 };
 
-/* RS-485 UART - 不再设置 rts-gpios */
+/* ================================================================
+ * 关键：禁用 uart20，彻底释放 P1.06 (RTS) 和 P1.07 (CTS)
+ * ================================================================ */
+&uart20 {
+    status = "disabled";
+};
+
+/* ================================================================
+ * 注意：不再将 uart21 或 uart22 用作 console/shell
+ * 控制台日志将通过 RTT 输出，由 prj.conf 中的 Kconfig 配置
+ * ================================================================ */
+
+/* ================================================================
+ * RS-485 UART (uart21)
+ * ================================================================ */
 &uart21 {
     status = "okay";
     current-speed = <115200>;
+    interrupts = < 0xc7 0x0 >; // 将优先级从 0x1 改为 0x0
+    // clocks = <&hfpll>;  /* 强制使用 PLL（源自 HFXO） */
     pinctrl-0 = <&uart21_default>;
     pinctrl-names = "default";
 };
 
-/* Zigbee UART */
+&pinctrl {
+    uart21_default: uart21_default {
+        group1 {
+            psels = <NRF_PSEL(UART_TX, 1, 4)>,
+                    <NRF_PSEL(UART_RX, 1, 5)>;
+        };
+    };
+};
+
+/* ================================================================
+ * Zigbee UART (uart22)
+ * ================================================================ */
 &uart22 {
     status = "okay";
     current-speed = <115200>;
     pinctrl-0 = <&uart22_default>;
     pinctrl-names = "default";
 };
+
+&pinctrl {
+    uart22_default: uart22_default {
+        group1 {
+            psels = <NRF_PSEL(UART_TX, 1, 12)>,
+                    <NRF_PSEL(UART_RX, 1, 13)>;
+        };
+    };
+};
+
+/* ================================================================
+ * ADC 配置：P1.07 (AIN3)
+ * ================================================================ */
 &adc {
     status = "okay";
     #address-cells = <1>;
     #size-cells = <0>;
 
-    /* 为 P1.07 (AIN3) 配置 ADC 通道 */
-    channel@3 {                    // 1. reg 必须与通道号一致
-        reg = <3>;                 // AIN3 对应数字 3[reference:6]
-        zephyr,gain = "ADC_GAIN_1_6"; /* [reference:8]增益 1/6，可测量最高 VDD 电压 */
-        zephyr,reference = "ADC_REF_INTERNAL"; /* [reference:9]使用内部参考电压 (0.9V)[reference:10] */
+    channel@3 {
+        reg = <3>;
+        zephyr,gain = "ADC_GAIN_1_6";
+        zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-        zephyr,input-positive = <NRF_SAADC_AIN3>; /* [reference:11]指定使用 AIN3 */
-        zephyr,resolution = <12>;  /* [reference:13]14位ADC, 常用12位分辨率 */
+        zephyr,input-positive = <NRF_SAADC_AIN3>;
+        zephyr,resolution = <12>;
     };
 };

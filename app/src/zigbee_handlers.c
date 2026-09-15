@@ -9,14 +9,16 @@
 
 LOG_MODULE_REGISTER(zigbee, LOG_LEVEL_INF);
 
+/* ---------- UART 设备定义 ---------- */
 #define UART_ZIGBEE_NODE DT_NODELABEL(uart22)
-#define LINK_ZIG_NODE DT_NODELABEL(link_zig)
-#define MODE_ZIG_NODE DT_NODELABEL(mode_zig)
-
 static const struct device *uart_zigbee_dev = DEVICE_DT_GET(UART_ZIGBEE_NODE);
-static const struct gpio_dt_spec link_zig_gpio = GPIO_DT_SPEC_GET(LINK_ZIG_NODE, gpios);
-static const struct gpio_dt_spec mode_zig_gpio = GPIO_DT_SPEC_GET(MODE_ZIG_NODE, gpios);
 
+/* ---------- GPIO 直接定义（P1.14 / P1.02） ---------- */
+#define ZIGBEE_GPIO_CTRL_NODE DT_NODELABEL(gpio1)
+#define LINK_ZIG_PIN          14   /* P1.14 */
+#define MODE_ZIG_PIN          2    /* P1.02 */
+
+static const struct device *zigbee_gpio_dev = DEVICE_DT_GET(ZIGBEE_GPIO_CTRL_NODE);
 
 K_MSGQ_DEFINE(zigbee_rx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
 K_MSGQ_DEFINE(zigbee_tx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
@@ -25,6 +27,7 @@ struct k_msgq *get_zigbee_tx_msgq(void) {
     return &zigbee_tx_msgq;
 }
 
+/* ---------- 中断接收回调 ---------- */
 static void zigbee_uart_cb(const struct device *dev, void *user_data) {
     ARG_UNUSED(user_data);
 
@@ -33,12 +36,16 @@ static void zigbee_uart_cb(const struct device *dev, void *user_data) {
     struct tx_msg msg;
     size_t total_len = 0;
 
-    while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
+    memset(&msg, 0, sizeof(msg));
+
+    uart_irq_update(dev);
+     while(uart_irq_is_pending(dev)) {
         if (uart_irq_rx_ready(dev)) {
-            len = uart_fifo_read(dev, buf, 64);
+            len = uart_fifo_read(dev, buf, sizeof(buf));
             if (len > 0) {
                 if (total_len + len > TX_MSG_MAX_DATA) {
-                    LOG_WRN("Zigbee RX overflow");
+                    LOG_WRN("Zigbee RX overflow, discarding");
+                    total_len = 0;
                     break;
                 }
                 memcpy(msg.data + total_len, buf, len);
@@ -55,6 +62,7 @@ static void zigbee_uart_cb(const struct device *dev, void *user_data) {
     }
 }
 
+/* ---------- 发送函数 ---------- */
 static void zigbee_send(const uint8_t *data, size_t len) {
     if (!device_is_ready(uart_zigbee_dev) || !data || len == 0) {
         return;
@@ -65,24 +73,32 @@ static void zigbee_send(const uint8_t *data, size_t len) {
     LOG_INF("Zigbee sent %u bytes", len);
 }
 
+/* ---------- 初始化 ---------- */
 int zigbee_init(void) {
-    if (!gpio_is_ready_dt(&link_zig_gpio)) {
-        LOG_ERR("LINK_ZIG not ready");
-        return -1;
+    if (!device_is_ready(zigbee_gpio_dev)) {
+        LOG_ERR("Zigbee GPIO controller not ready");
+        return -ENODEV;
     }
-    gpio_pin_configure_dt(&link_zig_gpio, GPIO_OUTPUT);
-    gpio_pin_set_dt(&link_zig_gpio, 0);
 
-    if (!gpio_is_ready_dt(&mode_zig_gpio)) {
-        LOG_ERR("MODE_ZIG not ready");
-        return -1;
+    /* 配置 LINK_ZIG 引脚为输出，初始低电平 */
+    int ret = gpio_pin_configure(zigbee_gpio_dev, LINK_ZIG_PIN,
+                                 GPIO_OUTPUT_INACTIVE);
+    if (ret < 0) {
+        LOG_ERR("LINK_ZIG config failed: %d", ret);
+        return ret;
     }
-    gpio_pin_configure_dt(&mode_zig_gpio, GPIO_OUTPUT);
-    gpio_pin_set_dt(&mode_zig_gpio, 0);
+
+    /* 配置 MODE_ZIG 引脚为输出，初始低电平 */
+    ret = gpio_pin_configure(zigbee_gpio_dev, MODE_ZIG_PIN,
+                             GPIO_OUTPUT_INACTIVE);
+    if (ret < 0) {
+        LOG_ERR("MODE_ZIG config failed: %d", ret);
+        return ret;
+    }
 
     if (!device_is_ready(uart_zigbee_dev)) {
         LOG_ERR("UART_ZIGBEE not ready");
-        return -1;
+        return -ENODEV;
     }
 
     uart_irq_callback_user_data_set(uart_zigbee_dev, zigbee_uart_cb, NULL);
@@ -91,6 +107,7 @@ int zigbee_init(void) {
     return 0;
 }
 
+/* ---------- 接收线程 ---------- */
 void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
     ARG_UNUSED(p1);
     ARG_UNUSED(p2);
@@ -113,7 +130,7 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
 
         int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
 
-        if (ret == 1  && reply_len > 0) {
+        if (ret == 1 && reply_len > 0) {
             struct tx_msg tx_msg;
             memset(&tx_msg, 0, sizeof(tx_msg));
             memcpy(tx_msg.data, reply, reply_len);
@@ -125,9 +142,11 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
             }
         }
     }
+    /* 不可达，保留占位 */
     free_worker(worker);
 }
 
+/* ---------- 发送线程 ---------- */
 void zigbee_tx_thread_entry(void *p1, void *p2, void *p3) {
     ARG_UNUSED(p1);
     ARG_UNUSED(p2);
