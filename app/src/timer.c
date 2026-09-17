@@ -10,6 +10,7 @@
 LOG_MODULE_REGISTER(timer, LOG_LEVEL_INF);
 
 static int index = 0;
+static struct k_timer test_timer;
 
 void timer_heartbeat_expiry_cb(struct k_timer *timer_id)
 {
@@ -113,9 +114,8 @@ void timer_test_thread(void *p1, void *p2, void *p3)
     ARG_UNUSED(p2);
     ARG_UNUSED(p3);
 
-    struct k_timer test_timer;
     k_timer_init(&test_timer, test_timer_action_expiry_cb, NULL);
-    k_timer_start(&test_timer, K_SECONDS(1), K_SECONDS(1));
+    k_timer_start(&test_timer, K_SECONDS(1), K_SECONDS(30));
 
     while (1) {
         if (index >= 28) {

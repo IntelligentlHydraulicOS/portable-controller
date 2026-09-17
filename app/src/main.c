@@ -24,15 +24,6 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 #define RS485_RX_PRIORITY  5
 #define RS485_TX_PRIORITY  4
 
-#define STORAGE_PARTITION_NODE DT_NODELABEL(storage_partition)
-
-/* 获取 Flash 设备（自动关联到 CPUAPP_RRAM） */
-#define FLASH_DEV_NODE DT_MTD_FROM_FIXED_PARTITION(STORAGE_PARTITION_NODE)
-
-/* 获取分区偏移和大小（直接从设备树） */
-#define STORAGE_OFFSET DT_REG_ADDR(STORAGE_PARTITION_NODE)
-#define STORAGE_SIZE   DT_REG_SIZE(STORAGE_PARTITION_NODE)
-
 K_THREAD_STACK_DEFINE(bt_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(bt_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(zigbee_rx_stack, THREAD_STACK_SIZE);
@@ -52,51 +43,6 @@ static struct k_thread rs485_tx_thread_data;
 static struct k_thread rs485_test_thread_data;
 static struct k_thread timer_test_thread_data;
 
-static const struct device *flash_dev = DEVICE_DT_GET(FLASH_DEV_NODE);
-int mount_log_fs(void) {
-    if (!device_is_ready(flash_dev)) {
-        LOG_ERR("Flash device not ready");
-        return -ENODEV;
-    }
-
-    /* 构造 flash_area */
-    struct flash_area fa = {
-        .fa_dev = flash_dev,
-        .fa_off = STORAGE_OFFSET,
-        .fa_size = STORAGE_SIZE,
-    };
-
-    struct fs_mount_t mp = {
-        .type = FS_LITTLEFS,
-        .mnt_point = "/lfs",
-        .storage_dev = &fa,
-        .fs_data = NULL,
-        .flags = 0,
-    };
-
-    int rc = fs_mount(&mp);
-    if (rc == 0) {
-        LOG_INF("LittleFS mounted on /lfs");
-        return 0;
-    }
-
-    LOG_ERR("Mount failed (err %d), attempting to format...", rc);
-
-    /* 格式化分区 */
-    rc = fs_mkfs(FS_LITTLEFS, (uintptr_t)&fa, NULL, 0);
-    if (rc != 0) {
-        LOG_ERR("Format failed (err %d)", rc);
-        return rc;
-    }
-
-    rc = fs_mount(&mp);
-    if (rc == 0) {
-        LOG_INF("LittleFS mounted after format");
-    } else {
-        LOG_ERR("Re-mount after format failed (err %d)", rc);
-    }
-    return rc;
-}
 
 #include <zephyr/drivers/clock_control/nrf_clock_control.h>
 #include <zephyr/sys/notify.h>
@@ -144,16 +90,56 @@ static int lock_hfxo_permanently(void)
     return 0;
 }
 
+struct fs_littlefs lfs_data;
+
+struct fs_mount_t mp = {
+    .type = FS_LITTLEFS,
+    .mnt_point = "/lfs",
+    .storage_dev = (void *)PARTITION_ID(storage_partition),
+    .fs_data = &lfs_data,
+    .flags = 0,
+};
+
+int mount_log_fs(void)
+{
+    int rc = fs_mount(&mp);
+    if (rc == 0) {
+        LOG_INF("LittleFS mounted on /lfs");
+        return 0;
+    }
+    if (rc == -EBUSY) {
+        /* 日志后端已提前挂载，属正常 */
+        LOG_INF("LittleFS already mounted");
+        return 0;
+    }
+
+    LOG_WRN("Mount failed (%d), formatting...", rc);
+    rc = fs_mkfs(FS_LITTLEFS,
+                 (uintptr_t)PARTITION_ID(storage_partition),
+                 NULL, 0);
+    if (rc != 0) {
+        LOG_ERR("Format failed (%d)", rc);
+        return rc;
+    }
+
+    rc = fs_mount(&mp);
+    if (rc == 0) {
+        LOG_INF("LittleFS mounted after format");
+    } else {
+        LOG_ERR("Re-mount failed (%d)", rc);
+    }
+    return rc;
+}
+
 int main(void) {
     int ret;
     bool is_ble_ok = false;
     bool is_zigbee_ok = false;
-    // int ret = mount_log_fs();
-    // if (ret == 0) {
-    //     LOG_INF("Log filesystem ready, logs will be saved.");
-    // } else {
-    //     LOG_WRN("Log filesystem unavailable, logs will NOT persist.");
-    // }
+
+    ret = mount_log_fs();
+    if (ret != 0) {
+        LOG_ERR("FS unavailable, logs will NOT persist");
+    }
 
     LOG_INF("=== Gateway Started ===");
     lock_hfxo_permanently();
@@ -182,7 +168,6 @@ int main(void) {
     ret = battery_monitor_init();
     if (ret < 0) {
         LOG_ERR("Battery monitor init failed: %d", ret);
-        return -1;
     }
     battery_monitor_set_charge_state(false);
 

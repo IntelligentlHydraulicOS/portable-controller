@@ -6,14 +6,10 @@
 
 LOG_MODULE_REGISTER(battery_monitor, CONFIG_LOG_DEFAULT_LEVEL);
 
-static const struct device *adc_dev;
-static bool is_charging = false;
+static const struct adc_dt_spec adc_ch =
+    ADC_DT_SPEC_GET(DT_PATH(zephyr_user));
 
-/* ADC 配置（与设备树一致） */
-#define ADC_CHANNEL_ID 3
-#define ADC_RESOLUTION 12
-#define ADC_GAIN_DIV 6
-#define ADC_REF_VOLTAGE_MV 900
+static bool is_charging = false;
 
 /* ========== 硬件分压系数 ==========
  * 电池电压 = V(P1.07) * (4/3) * (27.87 / 7.87)
@@ -89,10 +85,15 @@ static int voltage_to_soc(const int table[][2], size_t size, int voltage_mv)
 
 int battery_monitor_init(void)
 {
-    adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc));
-    if (!device_is_ready(adc_dev)) {
+    if (!adc_is_ready_dt(&adc_ch)) {
         LOG_ERR("ADC device not ready");
         return -ENODEV;
+    }
+
+    int rc = adc_channel_setup_dt(&adc_ch);   /* ← 关键：配置通道 */
+    if (rc != 0) {
+        LOG_ERR("ADC channel setup failed: %d", rc);
+        return rc;
     }
 
     LOG_INF("Battery monitor initialized");
@@ -107,32 +108,40 @@ void battery_monitor_set_charge_state(bool charging)
 
 int battery_monitor_get_voltage(int *voltage_mv)
 {
-    if (!adc_dev) {
-        LOG_ERR("ADC device not initialized");
-        return -EINVAL;
+    if (!adc_is_ready_dt(&adc_ch)) {
+        LOG_ERR("ADC device not ready");
+        return -ENODEV;
     }
 
     int16_t raw_value;
     struct adc_sequence sequence = {
-        .channels = BIT(ADC_CHANNEL_ID),
         .buffer = &raw_value,
         .buffer_size = sizeof(raw_value),
-        .resolution = ADC_RESOLUTION,
-        .oversampling = 0,
     };
 
-    int ret = adc_read(adc_dev, &sequence);
+    /* 用设备树参数初始化 sequence（通道、分辨率等） */
+    int ret = adc_sequence_init_dt(&adc_ch, &sequence);
+    if (ret < 0) {
+        LOG_ERR("adc_sequence_init_dt failed: %d", ret);
+        return ret;
+    }
+
+    ret = adc_read_dt(&adc_ch, &sequence);
     if (ret < 0) {
         LOG_ERR("ADC read failed: %d", ret);
         return ret;
     }
 
-    /* 1. 计算 P1.07 引脚电压 (mV) */
-    int32_t pin_voltage = (int32_t)raw_value * ADC_REF_VOLTAGE_MV * ADC_GAIN_DIV / (1 << ADC_RESOLUTION);
+    /* 将原始值转为 mV（用设备树中的增益和参考） */
+    int32_t val_mv = raw_value;
+    ret = adc_raw_to_millivolts_dt(&adc_ch, &val_mv);
+    if (ret < 0) {
+        LOG_ERR("adc_raw_to_millivolts_dt failed: %d", ret);
+        return ret;
+    }
 
-    /* 2. 换算为实际电池端电压 (mV) */
-    int32_t battery_voltage = pin_voltage * BATTERY_DIV_NUMERATOR / BATTERY_DIV_DENOMINATOR;
-
+    /* val_mv 就是 P1.07 引脚电压，再乘分压系数 */
+    int32_t battery_voltage = val_mv * BATTERY_DIV_NUMERATOR / BATTERY_DIV_DENOMINATOR;
     *voltage_mv = battery_voltage;
     return 0;
 }
