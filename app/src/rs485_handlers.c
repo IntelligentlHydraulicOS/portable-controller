@@ -208,12 +208,8 @@ void test(void)
 }
 
 /* ---------- 测试线程（每5秒发送一帧） ---------- */
-void rs485_test_thread(void *p1, void *p2, void *p3)
+void rs485_test_thread(void)
 {
-    ARG_UNUSED(p1);
-    ARG_UNUSED(p2);
-    ARG_UNUSED(p3);
-    
     // test(); // 若需测试 GPIO 翻转，请取消注释并注释下面的循环
 
     struct tx_msg tx_msg;

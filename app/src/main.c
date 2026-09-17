@@ -13,6 +13,11 @@
 #include "battery_monitor.h"
 #include "message.h"
 #include "timer.h"
+#include "worker.h"
+#include "thread_pool.h"
+#include <zephyr/drivers/clock_control/nrf_clock_control.h>
+#include <zephyr/sys/notify.h>
+
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
@@ -30,9 +35,6 @@ K_THREAD_STACK_DEFINE(zigbee_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(zigbee_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_tx_stack, THREAD_STACK_SIZE);
-K_THREAD_STACK_DEFINE(rs485_test_stack, THREAD_STACK_SIZE);
-K_THREAD_STACK_DEFINE(timer_test_stack, THREAD_STACK_SIZE);
-
 
 static struct k_thread bt_rx_thread_data;
 static struct k_thread bt_tx_thread_data;
@@ -40,14 +42,13 @@ static struct k_thread zigbee_rx_thread_data;
 static struct k_thread zigbee_tx_thread_data;
 static struct k_thread rs485_rx_thread_data;
 static struct k_thread rs485_tx_thread_data;
-static struct k_thread rs485_test_thread_data;
-static struct k_thread timer_test_thread_data;
-
-
-#include <zephyr/drivers/clock_control/nrf_clock_control.h>
-#include <zephyr/sys/notify.h>
 
 static struct onoff_client hfxo_cli;
+
+
+static void rs485_test_task(void *arg) { ARG_UNUSED(arg); rs485_test_thread(); }
+static void timer_test_task(void *arg) { ARG_UNUSED(arg); timer_test_thread(); }
+
 
 static int lock_hfxo_permanently(void)
 {
@@ -216,45 +217,40 @@ int main(void) {
                     RS485_TX_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(&rs485_tx_thread_data, "RS485_TX");
 
-    // k_thread_create(&rs485_test_thread_data, rs485_test_stack,
-    //                 K_THREAD_STACK_SIZEOF(rs485_test_stack),
-    //                 rs485_test_thread, NULL, NULL, NULL,
-    //                 RS485_TX_PRIORITY, 0, K_NO_WAIT);
-    // k_thread_name_set(&rs485_test_thread_data, "RS485_TEST");
+    if (thread_pool_init() != 0) {
+        LOG_ERR("thread pool init failed");
+        return -1;
+    }
 
-    k_thread_create(&timer_test_thread_data, timer_test_stack,
-                    K_THREAD_STACK_SIZEOF(timer_test_stack),
-                    timer_test_thread, NULL, NULL, NULL,
-                    RS485_TX_PRIORITY, 0, K_NO_WAIT);
-    k_thread_name_set(&timer_test_thread_data, "TIMER_TEST");
-
+    thread_pool_submit(rs485_test_task, NULL, K_NO_WAIT);
+    thread_pool_submit(timer_test_task,  NULL, K_NO_WAIT);
     LOG_INF("All threads created");
 
-    struct k_msgq *tx_msgq = NULL;
-    struct tx_msg msg;
+    // struct k_msgq *tx_msgq = NULL;
+    // struct tx_msg msg;
     while (1) {
-        int voltage, capacity, level;
-        ret = battery_monitor_get_voltage(&voltage);
-        if (ret == 0) {
-            ret = battery_monitor_get_capacity(&capacity);
-            if (ret == 0) {
-                battery_monitor_get_level(&level);
-                LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
-                if(is_ble_ok){
-                    tx_msgq = get_ble_tx_msgq();
-                }else if(!is_ble_ok && is_zigbee_ok){
-                    tx_msgq = get_zigbee_tx_msgq();
-                }
-                memset(&msg, 0, sizeof(struct tx_msg));
-                msg.data[0] = (uint8_t)(level & 0xFF);
-                msg.len = 1;
-                if (k_msgq_put(tx_msgq, &msg, K_NO_WAIT) != 0) {
-                    LOG_WRN("Battery Info TX queue full");
-                } else {
-                    LOG_INF("Battery Info reply enqueued");
-                }
-            }
-        }
+        // int voltage, capacity, level;
+        // ret = battery_monitor_get_voltage(&voltage);
+        // if (ret == 0) {
+        //     ret = battery_monitor_get_capacity(&capacity);
+        //     if (ret == 0) {
+        //         battery_monitor_get_level(&level);
+        //         LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
+        //         if(is_ble_ok){
+        //             tx_msgq = get_ble_tx_msgq();
+        //         }else if(!is_ble_ok && is_zigbee_ok){
+        //             tx_msgq = get_zigbee_tx_msgq();
+        //         }
+        //         memset(&msg, 0, sizeof(struct tx_msg));
+        //         msg.data[0] = (uint8_t)(level & 0xFF);
+        //         msg.len = 1;
+        //         if (k_msgq_put(tx_msgq, &msg, K_NO_WAIT) != 0) {
+        //             LOG_WRN("Battery Info TX queue full");
+        //         } else {
+        //             LOG_INF("Battery Info reply enqueued");
+        //         }
+        //     }
+        // }
         k_sleep(K_SECONDS(10));
     }
     return 0;

@@ -108,12 +108,8 @@ void test_timer_action_expiry_cb(struct k_timer *timer)
     }
 }
 
-void timer_test_thread(void *p1, void *p2, void *p3)
+void timer_test_thread(void)
 {
-    ARG_UNUSED(p1);
-    ARG_UNUSED(p2);
-    ARG_UNUSED(p3);
-
     k_timer_init(&test_timer, test_timer_action_expiry_cb, NULL);
     k_timer_start(&test_timer, K_SECONDS(1), K_SECONDS(30));
 

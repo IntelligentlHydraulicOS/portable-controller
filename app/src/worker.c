@@ -7,6 +7,8 @@
 #include "action.h"
 #include "message.h"
 #include "log.h"
+#include "thread_pool.h"
+#include <zephyr/kernel.h>
 
 uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
@@ -144,16 +146,36 @@ uint8_t cancel_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
     return 0;
 }
 
-uint8_t get_log_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len) {
-    if (worker == NULL || data == NULL || len < 9 || reply == NULL || reply_len == NULL) {
+
+static atomic_t log_sending = ATOMIC_INIT(0);
+static void send_all_logs_task(void *arg)
+{
+    if (atomic_cas(&log_sending, 0, 1) == false) {
+        return;
+    }
+    send_all_logs((worker_t *)arg);
+    atomic_set(&log_sending, 0);
+}
+
+uint8_t get_log_handler(worker_t *worker, uint8_t *data, size_t len,
+                        uint8_t *reply, size_t *reply_len)
+{
+    if (worker == NULL || data == NULL || len < 9 ||
+        reply == NULL || reply_len == NULL) {
         return 0;
     }
-    //TODO need thread to send all logs
-    send_all_logs(worker);
-    snprintf((char *)reply, TX_MSG_MAX_DATA, "Logs sent");
+
+    if (thread_pool_submit(send_all_logs_task, worker, K_NO_WAIT) != 0) {
+        snprintf((char *)reply, TX_MSG_MAX_DATA, "Log queue full, try later");
+        *reply_len = strlen((char *)reply);
+        return 0;
+    }
+
+    snprintf((char *)reply, TX_MSG_MAX_DATA, "Logs queued");
     *reply_len = strlen((char *)reply);
     return 1;
 }
+
 
 uint8_t do_work(worker_t *worker, uint8_t *data, size_t len,
                   uint8_t *reply, size_t *reply_len) {
