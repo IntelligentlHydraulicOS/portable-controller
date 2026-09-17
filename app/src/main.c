@@ -46,11 +46,6 @@ static struct k_thread rs485_tx_thread_data;
 
 static struct onoff_client hfxo_cli;
 
-
-static void rs485_test_task(void *arg) { ARG_UNUSED(arg); rs485_test_thread(); }
-static void timer_test_task(void *arg) { ARG_UNUSED(arg); timer_test_thread(); }
-
-
 static int lock_hfxo_permanently(void)
 {
     struct onoff_manager *clk_mgr;
@@ -223,8 +218,8 @@ int main(void) {
         return -1;
     }
 
-    thread_pool_submit(rs485_test_task, NULL, K_NO_WAIT);
-    thread_pool_submit(timer_test_task,  NULL, K_NO_WAIT);
+    thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
+    thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
     LOG_INF("All threads created");
 
     battery_scan_timer(is_ble_ok, is_zigbee_ok);

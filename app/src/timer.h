@@ -7,5 +7,5 @@
 
 void timer_heartbeat_expiry_cb(struct k_timer *timer_id);
 void timer_action_expiry_cb(struct k_timer *timer_id);
-void timer_test_thread(void);
+void timer_test_thread(void *args);
 #endif

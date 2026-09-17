@@ -1,5 +1,8 @@
 #include "thread_pool.h"
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(thread_pool, LOG_LEVEL_DBG);
 
 K_THREAD_STACK_ARRAY_DEFINE(pool_stacks, THREAD_POOL_SIZE, THREAD_POOL_STACK_SIZE);
 static struct k_thread pool_threads[THREAD_POOL_SIZE];

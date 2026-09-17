@@ -56,7 +56,6 @@ static void rs485_uart_cb(const struct device *dev, void *user_data)
 
     uart_irq_update(dev);
     while (uart_irq_is_pending(dev)) {
-        /* 检查帧错误、奇偶错误等 */
         int err = uart_err_check(dev);
         if (err) {
             LOG_WRN("RS485 UART error: 0x%02X, discarding frame", err);
@@ -65,7 +64,6 @@ static void rs485_uart_cb(const struct device *dev, void *user_data)
             continue;
         }
 
-        /* 接收处理 */
         if (uart_irq_rx_ready(dev)) {
             uint8_t buf[64];
             int len = uart_fifo_read(dev, buf, sizeof(buf));
@@ -77,12 +75,10 @@ static void rs485_uart_cb(const struct device *dev, void *user_data)
                 memcpy(rx_buf + rx_len, buf, len);
                 rx_len += len;
 
-                /* 每收到数据就重置超时定时器，5ms 内无新数据则认为一帧结束 */
                 k_timer_start(&rs485_rx_timer, K_MSEC(5), K_NO_WAIT);
             }
         }
 
-        /* 发送处理：当硬件 FIFO 有空位时，将数据填入 */
         if (uart_irq_tx_ready(dev)) {
             if (tx_idx < tx_len) {
                 int sent = uart_fifo_fill(dev, &tx_buf[tx_idx], tx_len - tx_idx);
@@ -90,9 +86,7 @@ static void rs485_uart_cb(const struct device *dev, void *user_data)
             }
         }
 
-        /* 发送完成处理：硬件已发送完最后一个停止位（包括移位寄存器中的） */
         if (uart_irq_tx_complete(dev)) {
-            /* 只有确认数据发完了，才关闭 TX 中断，拉低 DE */
             uart_irq_tx_disable(dev);
             gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 0); 
             tx_done = true;
@@ -207,11 +201,8 @@ void test(void)
     }
 }
 
-/* ---------- 测试线程（每5秒发送一帧） ---------- */
-void rs485_test_thread(void)
+void rs485_test_thread(void *arg)
 {
-    // test(); // 若需测试 GPIO 翻转，请取消注释并注释下面的循环
-
     struct tx_msg tx_msg;
     while (1) {
         memset(&tx_msg, 0, sizeof(tx_msg));
