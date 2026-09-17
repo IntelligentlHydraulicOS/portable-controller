@@ -218,11 +218,11 @@ int main(void) {
         return -1;
     }
 
-    thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
-    thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
+    // thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
+    // thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
     LOG_INF("All threads created");
 
-    battery_scan_timer(is_ble_ok, is_zigbee_ok);
+    // battery_scan_timer(is_ble_ok, is_zigbee_ok);
     LOG_INF("All timers created");
 
     while (1) 

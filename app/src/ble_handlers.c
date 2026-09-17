@@ -2,6 +2,7 @@
 #include "worker.h"
 #include "rs485_handlers.h"
 #include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/services/nus.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
@@ -12,8 +13,8 @@ LOG_MODULE_REGISTER(ble, LOG_LEVEL_DBG);
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
 
-
 static struct bt_conn *current_conn = NULL;
+static bool nus_tx_notif_enabled = false;
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
@@ -33,7 +34,8 @@ struct k_msgq *get_ble_tx_msgq(void) {
 
 static void nus_notif_enabled(bool enabled, void *ctx) {
     ARG_UNUSED(ctx);
-    LOG_DBG("NUS %s", enabled ? "Enabled" : "Disabled");
+    nus_tx_notif_enabled = enabled;
+    LOG_DBG("NUS TX notif %s", enabled ? "Enabled" : "Disabled");
 }
 
 static void recycled_cb(void) {
@@ -46,16 +48,40 @@ static void recycled_cb(void) {
     }
 }
 
+static void connected(struct bt_conn *conn, uint8_t err) {
+    if (err) {
+        LOG_ERR("BLE connection failed (err %u)", err);
+        return;
+    }
+
+    if (current_conn) {
+        bt_conn_unref(current_conn);
+    }
+
+    current_conn = bt_conn_ref(conn);
+    LOG_INF("BLE connected");
+}
+
+static void disconnected(struct bt_conn *conn, uint8_t reason) {
+    if (current_conn == conn) {
+        bt_conn_unref(current_conn);
+        current_conn = NULL;
+    }
+
+    nus_tx_notif_enabled = false;
+    LOG_INF("BLE disconnected (reason %u)", reason);
+}
+
 BT_CONN_CB_DEFINE(conn_callbacks) = {
+    .connected = connected,
+    .disconnected = disconnected,
     .recycled = recycled_cb,
-    /* 其他回调... */
 };
 
 static void nus_received(struct bt_conn *conn, const void *data, uint16_t len, void *ctx) {
     ARG_UNUSED(conn);
     ARG_UNUSED(ctx);
 
-    current_conn = conn;
     if (!data || len == 0 || len > TX_MSG_MAX_DATA) {
         return;
     }
@@ -121,7 +147,7 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3) {
 
         LOG_DBG("BT RX %u bytes", rx_msg.len);
         LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "BT Cmd:");
- 
+
         int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
 
         if (ret == 1 && reply_len > 0) {
@@ -152,7 +178,19 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3) {
             continue;
         }
 
-        int err = bt_nus_send(NULL, msg.data, msg.len);
+        struct bt_conn *conn = current_conn;
+
+        if (!conn) {
+            LOG_WRN("BLE not connected, drop %u bytes", msg.len);
+            continue;
+        }
+
+        if (!nus_tx_notif_enabled) {
+            LOG_WRN("NUS TX not subscribed, drop %u bytes", msg.len);
+            continue;
+        }
+
+        int err = bt_nus_send(conn, msg.data, msg.len);
         if (err < 0) {
             LOG_ERR("bt_nus_send fail: %d", err);
         } else {
