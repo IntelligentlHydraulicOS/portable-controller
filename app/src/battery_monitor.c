@@ -4,7 +4,7 @@
 #include <zephyr/logging/log.h>
 #include "battery_monitor.h"
 
-LOG_MODULE_REGISTER(battery_monitor, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(battery_monitor, LOG_LEVEL_DBG);
 
 static const struct adc_dt_spec adc_ch =
     ADC_DT_SPEC_GET(DT_PATH(zephyr_user));

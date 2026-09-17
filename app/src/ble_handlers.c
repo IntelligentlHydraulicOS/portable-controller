@@ -33,7 +33,7 @@ struct k_msgq *get_ble_tx_msgq(void) {
 
 static void nus_notif_enabled(bool enabled, void *ctx) {
     ARG_UNUSED(ctx);
-    LOG_INF("NUS %s", enabled ? "Enabled" : "Disabled");
+    LOG_DBG("NUS %s", enabled ? "Enabled" : "Disabled");
 }
 
 static void recycled_cb(void) {
@@ -42,7 +42,7 @@ static void recycled_cb(void) {
     if (err) {
         LOG_ERR("Advertising restart failed (err %d)", err);
     } else {
-        LOG_INF("Advertising restarted successfully");
+        LOG_DBG("Advertising restarted successfully");
     }
 }
 
@@ -83,14 +83,14 @@ int ble_init(void) {
         LOG_ERR("NUS cb reg fail: %d", err);
         return err;
     }
-    LOG_INF("BLE init bt_nus_cb_register done");
+    LOG_DBG("BLE init bt_nus_cb_register done");
 
     err = bt_enable(NULL);
     if (err) {
         LOG_ERR("BT enable fail: %d", err);
         return err;
     }
-    LOG_INF("BLE init bt_enable done");
+    LOG_DBG("BLE init bt_enable done");
 
     err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
     if (err) {
@@ -119,7 +119,7 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3) {
             continue;
         }
 
-        LOG_INF("BT RX %u bytes", rx_msg.len);
+        LOG_DBG("BT RX %u bytes", rx_msg.len);
         LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "BT Cmd:");
  
         int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
@@ -132,7 +132,7 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3) {
             if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
                 LOG_WRN("TX queue full");
             } else {
-                LOG_INF("reply enqueued");
+                LOG_DBG("reply enqueued");
             }
         }
     }
@@ -156,7 +156,7 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3) {
         if (err < 0) {
             LOG_ERR("bt_nus_send fail: %d", err);
         } else {
-            LOG_INF("BT sent %u bytes", msg.len);
+            LOG_DBG("BT sent %u bytes", msg.len);
             LOG_HEXDUMP_INF(msg.data, msg.len, "BT Sent:");
         }
     }

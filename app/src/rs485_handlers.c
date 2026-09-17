@@ -8,7 +8,7 @@
 #include <string.h>
 #include "message.h"
 
-LOG_MODULE_REGISTER(rs485, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(rs485, LOG_LEVEL_DBG);
 
 #define UART485_NODE DT_NODELABEL(uart21)
 #define RS485_DE_GPIO_CTRL_NODE DT_NODELABEL(gpio1)
@@ -96,7 +96,7 @@ static void rs485_uart_cb(const struct device *dev, void *user_data)
             uart_irq_tx_disable(dev);
             gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 0); 
             tx_done = true;
-            LOG_INF("TX complete, DE pulled low");
+            LOG_DBG("TX complete, DE pulled low");
         }
     }
 }
@@ -161,7 +161,7 @@ int rs485_init(void)
     uart_irq_callback_user_data_set(uart485_dev, rs485_uart_cb, NULL);
     uart_irq_rx_enable(uart485_dev);
 
-    LOG_INF("RS485 init done (interrupt driven, DE controlled by TX complete)");
+    LOG_DBG("RS485 init done (interrupt driven, DE controlled by TX complete)");
     return 0;
 }
 
@@ -174,7 +174,7 @@ void rs485_rx_thread_entry(void *p1, void *p2, void *p3)
     struct tx_msg rx_msg;
     while (1) {
         if (k_msgq_get(&rs485_rx_msgq, &rx_msg, K_FOREVER) == 0) {
-            LOG_INF("RS485 RX %u bytes", rx_msg.len);
+            LOG_DBG("RS485 RX %u bytes", rx_msg.len);
             LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "RS485 Cmd:");
         }
     }
@@ -190,7 +190,7 @@ void rs485_tx_thread_entry(void *p1, void *p2, void *p3)
     while (1) {
         if (k_msgq_get(&rs485_tx_msgq, &msg, K_FOREVER) == 0) {
             rs485_send(msg.data, msg.len);
-            LOG_INF("RS485 sent %u bytes", msg.len);
+            LOG_DBG("RS485 sent %u bytes", msg.len);
             LOG_HEXDUMP_INF(msg.data, msg.len, "RS485 Sent:");
         }
     }
@@ -228,7 +228,7 @@ void rs485_test_thread(void)
         if (k_msgq_put(&rs485_tx_msgq, &tx_msg, K_NO_WAIT) != 0) {
             LOG_WRN("TX queue full");
         } else {
-            LOG_INF("reply enqueued");
+            LOG_DBG("reply enqueued");
         }
         k_sleep(K_SECONDS(5));
     }

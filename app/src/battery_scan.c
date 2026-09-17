@@ -2,19 +2,18 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
-#include "battery_monitor.h"
 #include "message.h"
 #include "ble_handlers.h"
 #include "zigbee_handlers.h"
+#include "battery_monitor.h"
 
-LOG_MODULE_REGISTER(battery_scan, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(battery_scan, LOG_LEVEL_DBG);
 
 static struct k_timer scan_battery_timer;
 
 static bool s_use_ble    = false;
 static bool s_use_zigbee = false;
 
-/* ↓ 参数类型改成 struct k_timer * */
 static void battery_scan_timer_handler(struct k_timer *timer)
 {
     ARG_UNUSED(timer);
@@ -30,7 +29,7 @@ static void battery_scan_timer_handler(struct k_timer *timer)
         return;
     }
     battery_monitor_get_level(&level);
-    LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
+    LOG_DBG("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
 
     struct k_msgq *tx_msgq = NULL;
     if (s_use_ble) {
@@ -62,5 +61,5 @@ int battery_scan_timer(bool use_ble, bool use_zigbee)
 
     k_timer_init(&scan_battery_timer, battery_scan_timer_handler, NULL);
     k_timer_start(&scan_battery_timer, K_SECONDS(1), K_SECONDS(30));
-    return 0;   /* ← 补上 */
+    return 0;
 }

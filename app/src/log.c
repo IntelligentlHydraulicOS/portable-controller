@@ -16,7 +16,7 @@ void send_message(char *buf, size_t len, worker_t *worker) {
     if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
         LOG_WRN("log data TX queue full");
     } else {
-        LOG_INF("log data enqueued");
+        LOG_DBG("log data enqueued");
     }
 }
 
