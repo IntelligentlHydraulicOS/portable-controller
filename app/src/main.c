@@ -17,6 +17,7 @@
 #include "thread_pool.h"
 #include <zephyr/drivers/clock_control/nrf_clock_control.h>
 #include <zephyr/sys/notify.h>
+#include "battery_scan.h"
 
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
@@ -226,31 +227,11 @@ int main(void) {
     thread_pool_submit(timer_test_task,  NULL, K_NO_WAIT);
     LOG_INF("All threads created");
 
-    // struct k_msgq *tx_msgq = NULL;
-    // struct tx_msg msg;
-    while (1) {
-        // int voltage, capacity, level;
-        // ret = battery_monitor_get_voltage(&voltage);
-        // if (ret == 0) {
-        //     ret = battery_monitor_get_capacity(&capacity);
-        //     if (ret == 0) {
-        //         battery_monitor_get_level(&level);
-        //         LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
-        //         if(is_ble_ok){
-        //             tx_msgq = get_ble_tx_msgq();
-        //         }else if(!is_ble_ok && is_zigbee_ok){
-        //             tx_msgq = get_zigbee_tx_msgq();
-        //         }
-        //         memset(&msg, 0, sizeof(struct tx_msg));
-        //         msg.data[0] = (uint8_t)(level & 0xFF);
-        //         msg.len = 1;
-        //         if (k_msgq_put(tx_msgq, &msg, K_NO_WAIT) != 0) {
-        //             LOG_WRN("Battery Info TX queue full");
-        //         } else {
-        //             LOG_INF("Battery Info reply enqueued");
-        //         }
-        //     }
-        // }
+    battery_scan_timer(is_ble_ok, is_zigbee_ok);
+    LOG_INF("All timers created");
+
+    while (1) 
+    {
         k_sleep(K_SECONDS(10));
     }
     return 0;
