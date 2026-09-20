@@ -7,7 +7,7 @@
 #include "message.h"
 #include "log.h"
 
-LOG_MODULE_REGISTER(log_read, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(log_read, LOG_LEVEL_INF);
 
 void send_message(char *buf, size_t len, worker_t *worker) {
     struct tx_msg tx_msg;

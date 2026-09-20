@@ -7,7 +7,7 @@
 #include <string.h>
 #include "message.h"
 
-LOG_MODULE_REGISTER(zigbee, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(zigbee, LOG_LEVEL_INF);
 
 /* ---------- UART 设备定义 ---------- */
 #define UART_ZIGBEE_NODE DT_NODELABEL(uart22)

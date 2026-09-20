@@ -7,7 +7,7 @@
 #include "zigbee_handlers.h"
 #include "battery_monitor.h"
 
-LOG_MODULE_REGISTER(battery_scan, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(battery_scan, LOG_LEVEL_INF);
 
 static struct k_timer scan_battery_timer;
 
@@ -45,7 +45,7 @@ static void battery_scan_timer_handler(struct k_timer *timer)
     struct tx_msg msg;
     memset(&msg, 0, sizeof(msg));
     msg.data[0] = (uint8_t)(level & 0xFF);
-    msg.len     = 1;
+    msg.len = 1;
 
     if (k_msgq_put(tx_msgq, &msg, K_NO_WAIT) != 0) {
         LOG_WRN("Battery Info TX queue full");

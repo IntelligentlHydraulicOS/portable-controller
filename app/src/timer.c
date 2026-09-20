@@ -7,7 +7,7 @@
 #include "timer.h"
 #include "action.h"
 
-LOG_MODULE_REGISTER(timer, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(timer, LOG_LEVEL_INF);
 
 static int index = 0;
 static struct k_timer test_timer;
@@ -27,6 +27,7 @@ void timer_heartbeat_expiry_cb(struct k_timer *timer_id)
     tx_msg.data[6] = 0x00;
     tx_msg.data[7] = Xor(tx_msg.data, 8);
     tx_msg.len = 8;
+    tx_msg.type = BLE_TX_NUS;
     if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
         LOG_WRN("TX queue full");
     } else {

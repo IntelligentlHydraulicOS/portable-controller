@@ -9,9 +9,6 @@
 #define CMD_SOURCE_ZIGBEE 1
 #define CMD_SOURCE_RS485  2
 
-#define TX_MSG_MAX_DATA 256
-#define TX_MSG_QUEUE_SIZE 10
-
 typedef struct {
     struct k_timer timer_heartbeat;
     struct k_timer timer_action;

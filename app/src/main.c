@@ -20,7 +20,7 @@
 #include "battery_scan.h"
 
 
-LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 #define THREAD_STACK_SIZE 2048
 #define BT_RX_PRIORITY 5
@@ -43,49 +43,6 @@ static struct k_thread zigbee_rx_thread_data;
 static struct k_thread zigbee_tx_thread_data;
 static struct k_thread rs485_rx_thread_data;
 static struct k_thread rs485_tx_thread_data;
-
-static struct onoff_client hfxo_cli;
-
-static int lock_hfxo_permanently(void)
-{
-    struct onoff_manager *clk_mgr;
-    int ret;
-
-    clk_mgr = z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
-    if (!clk_mgr) {
-        LOG_ERR("Unable to get HF clock manager");
-        return -ENXIO;
-    }
-
-    sys_notify_init_spinwait(&hfxo_cli.notify);
-    ret = onoff_request(clk_mgr, &hfxo_cli);
-    if (ret < 0) {
-        LOG_ERR("HFXO request failed: %d", ret);
-        return ret;
-    }
-
-    while (sys_notify_fetch_result(&hfxo_cli.notify, &ret) != 0) {
-        k_busy_wait(100);
-    }
-    if (ret < 0) {
-        LOG_ERR("HFXO start failed: %d", ret);
-        return ret;
-    }
-
-    NRF_CLOCK->TASKS_XOSTART = 1;
-    uint32_t timeout = 10000;
-    while (NRF_CLOCK->EVENTS_XOSTARTED == 0 && timeout--) {
-        k_busy_wait(1);
-    }
-    if (NRF_CLOCK->EVENTS_XOSTARTED == 0) {
-        LOG_ERR("HFXO start timeout");
-        return -ETIMEDOUT;
-    }
-    NRF_CLOCK->EVENTS_XOSTARTED = 0;
-
-    LOG_INF("HFXO locked permanently");
-    return 0;
-}
 
 struct fs_littlefs lfs_data;
 
@@ -138,15 +95,7 @@ int main(void) {
         LOG_ERR("FS unavailable, logs will NOT persist");
     }
 
-    LOG_INF("=== Gateway Started ===");
-    lock_hfxo_permanently();
-    ret = zigbee_init();
-    if (ret < 0) {
-        LOG_ERR("Zigbee init failed: %d", ret);
-        is_zigbee_ok = false;
-    }else{
-        is_zigbee_ok = true;
-    }
+    // lock_hfxo_permanently();
 
     ret = rs485_init();
     if (ret < 0) {
@@ -154,12 +103,22 @@ int main(void) {
         return  -1;
     }
 
+    printk("main: before ble_init\n");
     ret = ble_init();
     if (ret < 0) {
         LOG_ERR("BLE init failed: %d", ret);
         is_ble_ok = false;
     }else{
         is_ble_ok = true;
+    }
+
+    printk("main: after ble_init, err=%d\n", ret);
+    ret = zigbee_init();
+    if (ret < 0) {
+        LOG_ERR("Zigbee init failed: %d", ret);
+        is_zigbee_ok = false;
+    }else{
+        is_zigbee_ok = true;
     }
 
     ret = battery_monitor_init();
@@ -219,7 +178,7 @@ int main(void) {
     }
 
     // thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
-    // thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
+    thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
     LOG_INF("All threads created");
 
     // battery_scan_timer(is_ble_ok, is_zigbee_ok);

@@ -8,7 +8,7 @@
 #include <string.h>
 #include "message.h"
 
-LOG_MODULE_REGISTER(rs485, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(rs485, LOG_LEVEL_INF);
 
 #define UART485_NODE DT_NODELABEL(uart21)
 #define RS485_DE_GPIO_CTRL_NODE DT_NODELABEL(gpio1)
