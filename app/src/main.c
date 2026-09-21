@@ -18,7 +18,7 @@
 #include <zephyr/drivers/clock_control/nrf_clock_control.h>
 #include <zephyr/sys/notify.h>
 #include "battery_scan.h"
-
+#include "proto_config.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -43,6 +43,8 @@ static struct k_thread zigbee_rx_thread_data;
 static struct k_thread zigbee_tx_thread_data;
 static struct k_thread rs485_rx_thread_data;
 static struct k_thread rs485_tx_thread_data;
+
+static protocol_t current_proto = PROTO_NONE;
 
 struct fs_littlefs lfs_data;
 
@@ -85,40 +87,29 @@ int mount_log_fs(void)
     return rc;
 }
 
+static protocol_t decide_protocol(bool ble_enabled, bool zigbee_enabled)
+{
+    if (ble_enabled) {
+        return PROTO_BLE;
+    }
+    if (zigbee_enabled) {
+        return PROTO_ZIGBEE;
+    }
+    return PROTO_NONE;
+}
+
 int main(void) {
     int ret;
-    bool is_ble_ok = false;
-    bool is_zigbee_ok = false;
 
     ret = mount_log_fs();
     if (ret != 0) {
         LOG_ERR("FS unavailable, logs will NOT persist");
     }
 
-    // lock_hfxo_permanently();
-
     ret = rs485_init();
     if (ret < 0) {
         LOG_ERR("RS485 init failed: %d", ret);
         return  -1;
-    }
-
-    printk("main: before ble_init\n");
-    ret = ble_init();
-    if (ret < 0) {
-        LOG_ERR("BLE init failed: %d", ret);
-        is_ble_ok = false;
-    }else{
-        is_ble_ok = true;
-    }
-
-    printk("main: after ble_init, err=%d\n", ret);
-    ret = zigbee_init();
-    if (ret < 0) {
-        LOG_ERR("Zigbee init failed: %d", ret);
-        is_zigbee_ok = false;
-    }else{
-        is_zigbee_ok = true;
     }
 
     ret = battery_monitor_init();
@@ -127,9 +118,50 @@ int main(void) {
     }
     battery_monitor_set_charge_state(false);
 
-    LOG_INF("=== init done start thread ===");
+    bool ble_enabled, zigbee_enabled;
+    proto_config_load(&ble_enabled, &zigbee_enabled);
+    LOG_INF("Protocol config: BLE=%d Zigbee=%d", ble_enabled, zigbee_enabled);
 
-    if (is_ble_ok) {
+    current_proto = decide_protocol(ble_enabled, zigbee_enabled);
+    switch (current_proto) {
+    case PROTO_BLE:
+        LOG_INF("Selected: BLE");
+        ret = ble_init();
+        if (ret) {
+            LOG_ERR("BLE init failed: %d", ret);
+            if (zigbee_enabled) {
+                LOG_WRN("Falling back to Zigbee");
+                current_proto = PROTO_ZIGBEE;
+                ret = zigbee_init();
+                if (ret) {
+                    LOG_ERR("Zigbee fallback failed: %d", ret);
+                    return -1;
+                }
+            } else {
+                return -1;
+            }
+        }
+        break;
+
+    case PROTO_ZIGBEE:
+        LOG_INF("Selected: Zigbee");
+        ret = zigbee_init();
+        if (ret) {
+            LOG_ERR("Zigbee init failed: %d", ret);
+            return -1;
+        }
+        break;
+
+    case PROTO_NONE:
+    default:
+        LOG_ERR("No protocol enabled (ble=%d zigbee=%d)",
+                ble_enabled, zigbee_enabled);
+        return -1;
+    }
+
+    LOG_INF("=== init done, start thread ===");
+
+    if (ble_enabled) {
         k_thread_create(&bt_rx_thread_data, bt_rx_stack,
                         K_THREAD_STACK_SIZEOF(bt_rx_stack),
                         ble_rx_thread_entry, NULL, NULL, NULL,
@@ -142,7 +174,7 @@ int main(void) {
                         BT_TX_PRIORITY, 0, K_NO_WAIT);
         k_thread_name_set(&bt_tx_thread_data, "BT_TX");
     }else{
-        if( is_zigbee_ok){
+        if( zigbee_enabled){
             k_thread_create(&zigbee_rx_thread_data, zigbee_rx_stack,
                             K_THREAD_STACK_SIZEOF(zigbee_rx_stack),
                             zigbee_rx_thread_entry, NULL, NULL, NULL,
@@ -181,7 +213,7 @@ int main(void) {
     thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
     LOG_INF("All threads created");
 
-    // battery_scan_timer(is_ble_ok, is_zigbee_ok);
+    // battery_scan_timer(ble_enabled, zigbee_enabled);
     LOG_INF("All timers created");
 
     while (1) 

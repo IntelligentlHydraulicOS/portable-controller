@@ -1,0 +1,9 @@
+device nRF54L15_M33
+si SWD
+speed 4000
+connect
+loadbin build/app/lfs.bin 0x174000
+verifybin build/app/lfs.bin 0x174000
+r
+g
+exit

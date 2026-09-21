@@ -4,3 +4,13 @@ project(moving_controler)
 
 file(GLOB app_sources src/*.c)
 target_sources(app PRIVATE ${app_sources})
+
+set(LFS_IMAGE ${CMAKE_BINARY_DIR}/lfs.bin)
+add_custom_command(
+    OUTPUT ${LFS_IMAGE}
+    COMMAND mklittlefs
+    ARGS -c ${CMAKE_SOURCE_DIR}/fs_content -b 4096 -p 64 -s 0x9000 ${LFS_IMAGE}
+    DEPENDS ${CMAKE_SOURCE_DIR}/fs_content
+    COMMENT "Generating LittleFS image..."
+)
+add_custom_target(lfs_image ALL DEPENDS ${LFS_IMAGE})

@@ -1,0 +1,3 @@
+只用 BLE			printf '\x01\x00' > fs_content/proto.cfg
+只用 Zigbee			printf '\x00\x01' > fs_content/proto.cfg
+两者都启用（实际走 BLE）	printf '\x01\x01' > fs_content/proto.cfg
