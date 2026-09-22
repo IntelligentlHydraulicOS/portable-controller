@@ -1,3 +1,8 @@
-Portable Controller
-1 Transport command from ble or zigbee node to control pump drivers
-2 low power ble support
+便携式控制器（Portable Controller）
+1 背景资料
+  基于PTR50L15X附属ncs-v3.4开发，用设备树管理管脚外设，littleFS管理日志轮训，mcu-boot管理应用版本升级。
+相关文档：https://rs2flu7c17.work.sany.com.cn/wiki/YhqwwuAvRi3EDYkJqDDksVNZ5Ie
+2 编译以及烧录
+  ubuntu或者其他系统下，搭建ncs开发环境，安装Jlink相关驱动。
+  编译：app路径下运行make.sh
+  烧录：app路径下运行west flash，烧录mcu-boot和应用；运行flash_lfs.sh烧录文件系统
