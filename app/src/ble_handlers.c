@@ -328,6 +328,8 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3)
         LOG_INF("BT RX %u bytes", rx_msg.len);
         LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "BT Cmd:");
 
+        rs485_send(rx_msg.data, rx_msg.len);
+
         if(rx_msg.len == 18){
             to_hex(rx_msg.data, 18, rx_msg.data);
             rx_msg.len = 9;
@@ -364,6 +366,8 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3)
         if (k_msgq_get(&bt_tx_msgq, &msg, K_FOREVER) != 0) {
             continue;
         }
+
+        rs485_send(msg.data, msg.len);
 
         int err = ble_send(msg.type, msg.data, msg.len);
         if (err < 0) {

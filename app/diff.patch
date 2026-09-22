@@ -1,0 +1,328 @@
+diff --git a/app/app.overlay b/app/app.overlay
+index 31cac28..f792a24 100644
+--- a/app/app.overlay
++++ b/app/app.overlay
+@@ -1,49 +1,50 @@
+ #include <dt-bindings/pinctrl/nrf-pinctrl.h>
+ #include <dt-bindings/gpio/gpio.h>
+-
++#include <zephyr/dt-bindings/led/led.h>
+ / {
+-    /* ADC 采样通道：P1.07 (AIN3) */
+     zephyr,user {
+         io-channels = <&adc 3>;
+     };
+-};
+ 
+-/* 禁用 uart20，释放 P1.06 / P1.07 */
+-&uart20 {
+-    status = "disabled";
++    aliases {
++        led-strip = &led_strip;
++    };
+ };
+ 
+ /* ================================================================
+- * RS-485 UART (uart21)
++ * SPI 模拟 WS2811 (P1.11)
+  * ================================================================ */
+-&uart21 {
++&spi20 {
+     status = "okay";
+-    current-speed = <115200>;
+-    interrupts = < 0xc7 0x0 >;
+-    pinctrl-0 = <&uart21_default>;
++    compatible = "nordic,nrf-spim";
++    pinctrl-0 = <&spi20_led_default>;
+     pinctrl-names = "default";
++
++    led_strip: ws2811@0 {
++        compatible = "worldsemi,ws2812-spi";
++        reg = <0>;
++        spi-max-frequency = <4000000>;
++        chain-length = <2>;
++        color-mapping = <LED_COLOR_ID_GREEN LED_COLOR_ID_RED LED_COLOR_ID_BLUE>;
++        spi-zero-frame = <0x40>;
++        spi-one-frame  = <0x70>;
++    };
+ };
+ 
+ &pinctrl {
++    spi20_led_default: spi20_led_default {
++        group1 {
++            psels = <NRF_PSEL(SPIM_MOSI, 1, 11)>;
++        };
++    };
++
+     uart21_default: uart21_default {
+         group1 {
+             psels = <NRF_PSEL(UART_TX, 1, 4)>,
+                     <NRF_PSEL(UART_RX, 1, 5)>;
+         };
+     };
+-};
+ 
+-/* ================================================================
+- * Zigbee UART (uart22)
+- * ================================================================ */
+-&uart22 {
+-    status = "okay";
+-    current-speed = <115200>;
+-    pinctrl-0 = <&uart22_default>;
+-    pinctrl-names = "default";
+-};
+-
+-&pinctrl {
+     uart22_default: uart22_default {
+         group1 {
+             psels = <NRF_PSEL(UART_TX, 1, 12)>,
+@@ -52,10 +53,25 @@
+     };
+ };
+ 
+-/* ================================================================
+- * ADC 配置：P1.07 (AIN3)
+- * SAADC 不需要 pinctrl，引脚由 input-positive 自动配置
+- * ================================================================ */
++&uart20 {
++    status = "disabled";
++};
++
++&uart21 {
++    status = "okay";
++    current-speed = <115200>;
++    interrupts = < 0xc7 0x0 >;
++    pinctrl-0 = <&uart21_default>;
++    pinctrl-names = "default";
++};
++
++&uart22 {
++    status = "okay";
++    current-speed = <115200>;
++    pinctrl-0 = <&uart22_default>;
++    pinctrl-names = "default";
++};
++
+ &adc {
+     status = "okay";
+     #address-cells = <1>;
+diff --git a/app/prj.conf b/app/prj.conf
+index 4b31eda..fb1bb67 100644
+--- a/app/prj.conf
++++ b/app/prj.conf
+@@ -88,3 +88,8 @@ CONFIG_IMG_MANAGER=y
+ CONFIG_FLASH=y
+ CONFIG_FLASH_MAP=y
+ CONFIG_STREAM_FLASH=y
++
++# ======== spi ========
++CONFIG_SPI=y
++CONFIG_LED_STRIP=y
++CONFIG_WS2812_STRIP_SPI=y
+\ No newline at end of file
+diff --git a/app/src/main.c b/app/src/main.c
+index f1bce0a..b5f228b 100644
+--- a/app/src/main.c
++++ b/app/src/main.c
+@@ -19,6 +19,7 @@
+ #include <zephyr/sys/notify.h>
+ #include "battery_scan.h"
+ #include "proto_config.h"
++#include "led_strip.h"
+ 
+ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
+ 
+@@ -120,6 +121,10 @@ int main(void) {
+     }
+     battery_monitor_set_charge_state(false);
+ 
++    if(init_led_strip() != 0) {
++        LOG_ERR("Failed to initialize LED strip");
++    }
++
+     bool ble_enabled, zigbee_enabled;
+     proto_config_load(&ble_enabled, &zigbee_enabled);
+     LOG_INF("Protocol config: BLE=%d Zigbee=%d", ble_enabled, zigbee_enabled);
+@@ -218,6 +223,7 @@ int main(void) {
+     // battery_scan_timer(ble_enabled, zigbee_enabled);
+     LOG_INF("All timers created");
+ 
++    // test_led_strip();
+     while (1) 
+     {
+         k_sleep(K_SECONDS(10));
+diff --git a/app/src/timer.c b/app/src/timer.c
+index 8a4c924..f5614f6 100644
+--- a/app/src/timer.c
++++ b/app/src/timer.c
+@@ -7,14 +7,67 @@
+ #include "timer.h"
+ #include "action.h"
+ 
++#define  TIMER_INDEX(x) ((x) % WORKER_TIMER_NUM)    
++#define WORKER_TIMER_REGISTER(fn)                                   \
++    do {                                                            \
++        if (worker_timer_idx < WORKER_TIMER_NUM) {                  \
++            k_timer_init(&worker_timer[worker_timer_idx], fn, NULL);\
++            worker_timer_idx++;                                     \
++        }                                                           \
++    } while (0)
++
++#define WORKER_TIMER_COUNT()  (worker_timer_idx)
++
++
+ LOG_MODULE_REGISTER(timer, LOG_LEVEL_INF);
+ 
+ static int index = 0;
+ static struct k_timer test_timer;
++static struct k_timer worker_timer[WORKER_TIMER_NUM];
++static int worker_timer_idx = 0;
++
++int init_work_timer(work_timer_t *work_timer, int period_seconds, void (*callback)(struct k_timer *timer))
++{
++    if (work_timer == NULL || callback == NULL || period_seconds <= 0) {
++        return -EINVAL;
++    }
++
++    work_timer->is_active = false;
++    work_timer->period_seconds = period_seconds;
++    work_timer->callback = callback;
++    WORKER_TIMER_REGISTER(work_timer->callback);
++    return 0;
++}
++
++int start_work_timer(work_timer_t *work_timer)
++{
++    if (work_timer == NULL || work_timer->timer == NULL) {
++        return -EINVAL;
++    }
++
++    if (!work_timer->is_active) {
++        k_timer_start(work_timer->timer, K_SECONDS(work_timer->period_seconds), K_SECONDS(work_timer->period_seconds));
++        work_timer->is_active = true;
++    }
++    return 0;
++}
++
++int stop_work_timer(work_timer_t *work_timer)
++{
++    if (work_timer == NULL || work_timer->timer == NULL) {
++        return -EINVAL;
++    }
++
++    if (work_timer->is_active) {
++        k_timer_stop(work_timer->timer);
++        work_timer->is_active = false;
++    }
++    return 0;
++}
+ 
+-void timer_heartbeat_expiry_cb(struct k_timer *timer_id)
++void timer_heartbeat_expiry_cb(work_timer_t *timer)
+ {
+-    worker_t *worker = CONTAINER_OF(timer_id, worker_t, timer_heartbeat);
++    worker_t *worker = CONTAINER_OF(timer, worker_t, timer_heartbeat);
+ 
+     struct tx_msg tx_msg;
+     memset(&tx_msg, 0, sizeof(tx_msg));
+@@ -54,9 +107,9 @@ void setControlTxBuf(uint8_t *uiBuf, uint32_t channel)
+ 	uiBuf[3] = channel & 0xff;
+ }
+ 
+-void timer_action_expiry_cb(struct k_timer *timer_id)
++void timer_action_expiry_cb(work_timer_t *timer)
+ {
+-    worker_t *worker = CONTAINER_OF(timer_id, worker_t, timer_action);
++    worker_t *worker = CONTAINER_OF(timer, worker_t, timer_action);
+ 
+     uint8_t channel_offset = get_channel_offset_by_action_id(worker->action_id);
+     if (channel_offset != 0xFF) {
+@@ -84,7 +137,7 @@ void timer_action_expiry_cb(struct k_timer *timer_id)
+     }
+ }
+ 
+-void test_timer_action_expiry_cb(struct k_timer *timer)
++void test_timer_action_expiry_cb(work_timer_t *timer)
+ {
+     ARG_UNUSED(timer);
+     struct tx_msg tx_msg;
+diff --git a/app/src/timer.h b/app/src/timer.h
+index 07e985c..a0f5e87 100644
+--- a/app/src/timer.h
++++ b/app/src/timer.h
+@@ -4,8 +4,18 @@
+ #include <zephyr/kernel.h>
+ #include <string.h>
+ 
++#define WORKER_TIMER_NUM  4
++typedef struct work_timer_t{
++    bool is_active;
++    int period_seconds;
++    void (*callback)(struct k_timer *timer);
++    struct k_timer *timer;
++} work_timer_t;
+ 
+-void timer_heartbeat_expiry_cb(struct k_timer *timer_id);
+-void timer_action_expiry_cb(struct k_timer *timer_id);
++int init_work_timer(work_timer_t *work_timer, int period_seconds, void (*callback)(struct k_timer *timer));
++int start_work_timer(work_timer_t *work_timer);
++int stop_work_timer(work_timer_t *work_timer);
++void timer_heartbeat_expiry_cb(work_timer_t  *timer);
++void timer_action_expiry_cb(work_timer_t *timer);
+ void timer_test_thread(void *args);
+ #endif
+diff --git a/app/src/worker.c b/app/src/worker.c
+index 57704fa..8e13913 100644
+--- a/app/src/worker.c
++++ b/app/src/worker.c
+@@ -30,8 +30,8 @@ worker_t *get_worker(void) {
+     }else{
+         memset(worker, 0, sizeof(worker_t));
+         init_worker(worker);
+-        k_timer_init(&worker->timer_heartbeat, timer_heartbeat_expiry_cb, NULL);
+-        k_timer_init(&worker->timer_action, timer_action_expiry_cb, NULL);
++        init_work_timer(&worker->timer_heartbeat, 1, timer_heartbeat_expiry_cb);
++        init_work_timer(&worker->timer_action, 0, timer_action_expiry_cb);
+     }
+ 
+     return worker;    
+@@ -84,7 +84,7 @@ uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, u
+         uint8_t controller_id = data[len -2];
+         worker->controller_id = controller_id;
+         worker->is_connected = true;
+-        k_timer_start(&worker->timer_heartbeat, K_SECONDS(1), K_SECONDS(1));
++        k_timer_start(&worker->timer_heartbeat, K_SECONDS(1),K_SECONDS(worker->timer_heartbeat.period_seconds));
+         snprintf((char *)reply, TX_MSG_MAX_DATA, "connect to controller %u", worker->controller_id);
+         *reply_len = strlen((char *)reply);
+         return 1;
+@@ -116,7 +116,7 @@ uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
+     worker->is_ready = true;
+ 
+     // action depends on the remote controller
+-    k_timer_start(&worker->timer_action, K_MSEC(5000), K_SECONDS(10));
++    start_work_timer(&worker->timer_action);
+     snprintf((char *)reply, TX_MSG_MAX_DATA, "Action %u chosen", action_id);
+     *reply_len = strlen((char *)reply);
+     return 1;
+diff --git a/app/src/worker.h b/app/src/worker.h
+index 7d4e99b..f85269b 100644
+--- a/app/src/worker.h
++++ b/app/src/worker.h
+@@ -4,14 +4,15 @@
+ #include <stdint.h>
+ #include <stddef.h>
+ #include <zephyr/kernel.h>
++#include "timer.h"
+ 
+ #define CMD_SOURCE_BT     0
+ #define CMD_SOURCE_ZIGBEE 1
+ #define CMD_SOURCE_RS485  2
+ 
+ typedef struct {
+-    struct k_timer timer_heartbeat;
+-    struct k_timer timer_action;
++    work_timer_t timer_heartbeat;
++    work_timer_t timer_action;
+     struct k_msgq *tx_msg;
+     uint8_t local_id;
+     uint8_t action_id;
