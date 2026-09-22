@@ -29,7 +29,7 @@ static void battery_scan_timer_handler(struct k_timer *timer)
         return;
     }
     battery_monitor_get_level(&level);
-    LOG_DBG("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
+    LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
 
     struct k_msgq *tx_msgq = NULL;
     if (s_use_ble) {
@@ -38,7 +38,7 @@ static void battery_scan_timer_handler(struct k_timer *timer)
         tx_msgq = get_zigbee_tx_msgq();
     }
     if (tx_msgq == NULL) {
-        LOG_DBG("No TX channel for battery report");
+        LOG_ERR("No TX channel for battery report");
         return;
     }
 
@@ -50,7 +50,7 @@ static void battery_scan_timer_handler(struct k_timer *timer)
     if (k_msgq_put(tx_msgq, &msg, K_NO_WAIT) != 0) {
         LOG_WRN("Battery Info TX queue full");
     } else {
-        LOG_DBG("Battery Info reply enqueued");
+        LOG_INF("Battery Info reply enqueued");
     }
 }
 

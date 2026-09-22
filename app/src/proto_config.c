@@ -4,7 +4,7 @@
 #include <string.h>
 #include <errno.h>
 
-LOG_MODULE_REGISTER(proto_cfg, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(proto_cfg, LOG_LEVEL_INF);
 
 /* 文件格式：2 字节 [ble_enabled][zigbee_enabled] */
 #define CFG_FILE_SIZE 2

@@ -31,7 +31,7 @@ void timer_heartbeat_expiry_cb(struct k_timer *timer_id)
     if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
         LOG_WRN("TX queue full");
     } else {
-        LOG_DBG("reply enqueued");
+        LOG_INF("reply enqueued");
     }
 }
 
@@ -77,7 +77,7 @@ void timer_action_expiry_cb(struct k_timer *timer_id)
         if (k_msgq_put(get_rs485_tx_msgq(), &tx_msg, K_NO_WAIT) != 0) {
             LOG_WRN("TX queue full");
         } else {
-            LOG_DBG("reply enqueued");
+            LOG_INF("reply enqueued");
         }
     } else {
         LOG_WRN("Invalid action_id: %u", worker->action_id);

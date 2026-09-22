@@ -62,7 +62,7 @@ static void custom_notify_ccc_cfg_changed(const struct bt_gatt_attr *attr,
 {
     ARG_UNUSED(attr);
     notify_subscribed = (value == BT_GATT_CCC_NOTIFY);
-    LOG_DBG("Custom Notify %s", notify_subscribed ? "subscribed" : "unsubscribed");
+    LOG_INF("Custom Notify %s", notify_subscribed ? "subscribed" : "unsubscribed");
 }
 
 static void custom_indicate_ccc_cfg_changed(const struct bt_gatt_attr *attr,
@@ -70,7 +70,7 @@ static void custom_indicate_ccc_cfg_changed(const struct bt_gatt_attr *attr,
 {
     ARG_UNUSED(attr);
     indicate_subscribed = (value == BT_GATT_CCC_INDICATE);
-    LOG_DBG("Custom Indicate %s", indicate_subscribed ? "subscribed" : "unsubscribed");
+    LOG_INF("Custom Indicate %s", indicate_subscribed ? "subscribed" : "unsubscribed");
 }
 
 BT_GATT_SERVICE_DEFINE(custom_svc,
@@ -109,7 +109,7 @@ static void indicate_cb(struct bt_conn *conn,
     if (err) {
         LOG_ERR("Indicate failed (err %u)", err);
     } else {
-        LOG_DBG("Indicate ACK received");
+        LOG_INF("Indicate ACK received");
     }
 }
 
@@ -145,7 +145,7 @@ int ble_send(ble_tx_type_t type, const uint8_t *data, uint16_t len)
     case BLE_TX_INDICATE:
         if (!indicate_subscribed) {
             LOG_WRN("Custom Indicate not subscribed");
-            return -EACCES;
+            return -EACCES;  
         }
         {
             /* 必须 static：bt_gatt_indicate 异步引用该结构 */
@@ -163,7 +163,7 @@ int ble_send(ble_tx_type_t type, const uint8_t *data, uint16_t len)
     }
 
     if (err < 0) {
-        LOG_ERR("ble_send(type=%d) fail: %d", type, err);
+        LOG_DBG("ble_send(type=%d) fail: %d", type, err);
     } else {
         LOG_DBG("ble_send(type=%d) OK, %u bytes", type, len);
     }
@@ -175,7 +175,7 @@ static void nus_notif_enabled(bool enabled, void *ctx)
 {
     ARG_UNUSED(ctx);
     nus_tx_notif_enabled = enabled;
-    LOG_DBG("NUS TX notif %s", enabled ? "Enabled" : "Disabled");
+    LOG_INF("NUS TX notif %s", enabled ? "Enabled" : "Disabled");
 }
 
 static void nus_received(struct bt_conn *conn, const void *data,
@@ -212,7 +212,7 @@ static void recycled_cb(void)
     if (err) {
         LOG_ERR("Advertising restart failed (err %d)", err);
     } else {
-        LOG_DBG("Advertising restarted successfully");
+        LOG_INF("Advertising restarted successfully");
     }
 }
 
@@ -287,6 +287,24 @@ int ble_init(void)
     return 0;
 }
 
+uint8_t hex_char_to_val(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return 0;
+}
+
+void to_hex(uint8_t *data, size_t len, uint8_t *out) {
+    if (data == NULL || out == NULL) {
+        return;
+    }
+    for (int i = 0; i < len; i += 2) {
+        uint8_t high = hex_char_to_val(data[i]);
+        uint8_t low  = hex_char_to_val(data[i + 1]);
+        out[i / 2] = (high << 4) | low;
+    }
+}
+
 /* ---------- RX 线程 ---------- */
 void ble_rx_thread_entry(void *p1, void *p2, void *p3)
 {
@@ -307,9 +325,13 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3)
             continue;
         }
 
-        LOG_DBG("BT RX %u bytes", rx_msg.len);
+        LOG_INF("BT RX %u bytes", rx_msg.len);
         LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "BT Cmd:");
 
+        if(rx_msg.len == 18){
+            to_hex(rx_msg.data, 18, rx_msg.data);
+            rx_msg.len = 9;
+        }
         int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
 
         if (ret == 1 && reply_len > 0) {
@@ -321,7 +343,7 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3)
             if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
                 LOG_WRN("TX queue full");
             } else {
-                LOG_DBG("reply enqueued");
+                LOG_INF("reply enqueued");
             }
         }
     }

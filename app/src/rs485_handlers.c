@@ -155,7 +155,7 @@ int rs485_init(void)
     uart_irq_callback_user_data_set(uart485_dev, rs485_uart_cb, NULL);
     uart_irq_rx_enable(uart485_dev);
 
-    LOG_DBG("RS485 init done (interrupt driven, DE controlled by TX complete)");
+    LOG_INF("RS485 init done (interrupt driven, DE controlled by TX complete)");
     return 0;
 }
 
@@ -168,7 +168,7 @@ void rs485_rx_thread_entry(void *p1, void *p2, void *p3)
     struct tx_msg rx_msg;
     while (1) {
         if (k_msgq_get(&rs485_rx_msgq, &rx_msg, K_FOREVER) == 0) {
-            LOG_DBG("RS485 RX %u bytes", rx_msg.len);
+            LOG_INF("RS485 RX %u bytes", rx_msg.len);
             LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "RS485 Cmd:");
         }
     }
@@ -184,7 +184,7 @@ void rs485_tx_thread_entry(void *p1, void *p2, void *p3)
     while (1) {
         if (k_msgq_get(&rs485_tx_msgq, &msg, K_FOREVER) == 0) {
             rs485_send(msg.data, msg.len);
-            LOG_DBG("RS485 sent %u bytes", msg.len);
+            LOG_INF("RS485 sent %u bytes", msg.len);
             LOG_HEXDUMP_INF(msg.data, msg.len, "RS485 Sent:");
         }
     }

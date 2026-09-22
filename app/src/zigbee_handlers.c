@@ -70,7 +70,7 @@ static void zigbee_send(const uint8_t *data, size_t len) {
     for (size_t i = 0; i < len; i++) {
         uart_poll_out(uart_zigbee_dev, data[i]);
     }
-    LOG_DBG("Zigbee sent %u bytes", len);
+    LOG_INF("Zigbee sent %u bytes", len);
 }
 
 /* ---------- 初始化 ---------- */
@@ -125,7 +125,7 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
             continue;
         }
 
-        LOG_DBG("Zigbee RX %u bytes", rx_msg.len);
+        LOG_INF("Zigbee RX %u bytes", rx_msg.len);
         LOG_HEXDUMP_INF(rx_msg.data, rx_msg.len, "Zigbee Cmd:");
 
         int ret = do_work(worker, rx_msg.data, rx_msg.len, reply, &reply_len);
@@ -138,7 +138,7 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
             if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
                 LOG_WRN("Zigbee TX queue full");
             } else {
-                LOG_DBG("Zigbee reply enqueued");
+                LOG_INF("Zigbee reply enqueued");
             }
         }
     }
@@ -160,7 +160,7 @@ void zigbee_tx_thread_entry(void *p1, void *p2, void *p3) {
         }
 
         zigbee_send(msg.data, msg.len);
-        LOG_DBG("Zigbee sent %u bytes", msg.len);
+        LOG_INF("Zigbee sent %u bytes", msg.len);
         LOG_HEXDUMP_INF(msg.data, msg.len, "Zigbee Sent:");
     }
 }

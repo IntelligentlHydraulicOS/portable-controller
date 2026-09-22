@@ -60,7 +60,7 @@ int mount_log_fs(void)
 {
     int rc = fs_mount(&mp);
     if (rc == 0) {
-        LOG_INF("LittleFS mounted on /lfs");
+        LOG_ERR("LittleFS mounted on /lfs");
         return 0;
     }
     if (rc == -EBUSY) {
@@ -91,10 +91,12 @@ static protocol_t decide_protocol(bool ble_enabled, bool zigbee_enabled)
 {
     if (ble_enabled) {
         return PROTO_BLE;
+    }else {
+        if (zigbee_enabled) {
+            return PROTO_ZIGBEE;
+        }
     }
-    if (zigbee_enabled) {
-        return PROTO_ZIGBEE;
-    }
+
     return PROTO_NONE;
 }
 
@@ -210,7 +212,7 @@ int main(void) {
     }
 
     // thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
-    thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
+    // thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
     LOG_INF("All threads created");
 
     // battery_scan_timer(ble_enabled, zigbee_enabled);

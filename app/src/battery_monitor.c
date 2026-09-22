@@ -103,7 +103,7 @@ int battery_monitor_init(void)
 void battery_monitor_set_charge_state(bool charging)
 {
     is_charging = charging;
-    LOG_DBG("Battery state: %s", charging ? "Charging" : "Discharging");
+    LOG_INF("Battery state: %s", charging ? "Charging" : "Discharging");
 }
 
 int battery_monitor_get_voltage(int *voltage_mv)
