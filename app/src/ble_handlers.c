@@ -8,6 +8,7 @@
 #include <zephyr/logging/log.h>
 #include <string.h>
 #include "message.h"
+#include "led_control.h"
 
 LOG_MODULE_REGISTER(ble, LOG_LEVEL_INF);
 
@@ -22,6 +23,13 @@ static struct bt_conn *current_conn = NULL;
 static bool nus_tx_notif_enabled = false;
 static bool notify_subscribed = false;
 static bool indicate_subscribed = false;
+typedef enum {
+    BLE_ST_DISCONNECTED,    /* 🔴 红 */
+    BLE_ST_CONNECTED,       /* 🟢 绿闪 */
+    BLE_ST_NUS_READY,       /* 🟢 绿常亮 */
+} ble_state_t;
+
+static ble_state_t ble_state = BLE_ST_DISCONNECTED;
 
 /* ---------- 广播数据 ---------- */
 static const struct bt_data ad[] = {
@@ -113,6 +121,21 @@ static void indicate_cb(struct bt_conn *conn,
     }
 }
 
+static void update_led_from_state(void)
+{
+    switch (ble_state) {
+    case BLE_ST_DISCONNECTED:
+        led_control_static(30, 0, 0);     /* 红 */
+        break;
+    case BLE_ST_CONNECTED:
+        led_control_blink(0, 255, 0, 200); /* 绿闪 */
+        break;
+    case BLE_ST_NUS_READY:
+        led_control_static(0, 255, 0);     /* 绿常亮 */
+        break;
+    }
+}
+
 /* ---------- 统一发送接口 ---------- */
 int ble_send(ble_tx_type_t type, const uint8_t *data, uint16_t len)
 {
@@ -175,6 +198,15 @@ static void nus_notif_enabled(bool enabled, void *ctx)
 {
     ARG_UNUSED(ctx);
     nus_tx_notif_enabled = enabled;
+
+    if (!current_conn) {
+        LOG_INF("NUS TX notif %s (no conn, keep LED)", enabled ? "Enabled" : "Disabled");
+        return;
+    }
+
+    ble_state = enabled ? BLE_ST_NUS_READY : BLE_ST_CONNECTED;
+    update_led_from_state();
+
     LOG_INF("NUS TX notif %s", enabled ? "Enabled" : "Disabled");
 }
 
@@ -214,6 +246,8 @@ static void recycled_cb(void)
     } else {
         LOG_INF("Advertising restarted successfully");
     }
+    ble_state = BLE_ST_DISCONNECTED;
+    update_led_from_state();
 }
 
 static void connected(struct bt_conn *conn, uint8_t err)
@@ -234,12 +268,17 @@ static void connected(struct bt_conn *conn, uint8_t err)
     notify_subscribed = false;
     indicate_subscribed = false;
 
+    ble_state = BLE_ST_CONNECTED;
+    update_led_from_state();
+
     LOG_INF("BLE connected");
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-    if (current_conn == conn) {
+    ARG_UNUSED(conn);
+
+    if (current_conn) {
         bt_conn_unref(current_conn);
         current_conn = NULL;
     }
@@ -248,6 +287,8 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     notify_subscribed = false;
     indicate_subscribed = false;
 
+    ble_state = BLE_ST_DISCONNECTED;
+    update_led_from_state();
     LOG_INF("BLE disconnected (reason %u)", reason);
 }
 
@@ -316,7 +357,7 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3)
     memset(&rx_msg, 0, sizeof(rx_msg));
     uint8_t reply[TX_MSG_MAX_DATA];
     size_t reply_len = 0;
-    worker_t *worker = get_worker();
+    worker_t *worker = (worker_t *)p1;
     worker->source = CMD_SOURCE_BT;
     worker->tx_msg = get_ble_tx_msgq();
 
@@ -347,7 +388,6 @@ void ble_rx_thread_entry(void *p1, void *p2, void *p3)
             }
         }
     }
-    free_worker(worker);
 }
 
 /* ---------- TX 线程 ---------- */
@@ -356,6 +396,9 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3)
     ARG_UNUSED(p1);
     ARG_UNUSED(p2);
     ARG_UNUSED(p3);
+
+    worker_t *worker = (worker_t *)p1;
+    int fail_send_counter = 0;
 
     struct tx_msg msg;
     memset(&msg, 0, sizeof(msg));
@@ -366,8 +409,24 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3)
         }
 
         int err = ble_send(msg.type, msg.data, msg.len);
-        if (err < 0) {
-            LOG_WRN("ble_send failed, drop %u bytes", msg.len);
+        if (err < 0 ) {
+            if( msg.type == BLE_TX_NOTIFY || msg.type == BLE_TX_NUS) {
+                fail_send_counter++;
+                if (fail_send_counter >= 10) {
+                    stop_work_timer(&worker->timer_heartbeat);
+                    stop_work_timer(&worker->timer_action);
+                    fail_send_counter = 0;
+                    LOG_ERR("BLE TX NOYTIFY failed 10 times, resetting connection");
+                    if (current_conn) {
+                        bt_conn_disconnect(current_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); 
+                    }
+                }
+            } else{
+                LOG_ERR("ble_send failed (type=%d, err=%d)", msg.type, err);
+            }
+        } else {
+            LOG_DBG("ble_send succeeded");
+            fail_send_counter = 0;
         }
     }
 }

@@ -116,7 +116,7 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
     struct tx_msg rx_msg;
     uint8_t reply[TX_MSG_MAX_DATA];
     size_t reply_len = 0;
-    worker_t *worker = get_worker();
+    worker_t *worker = (worker_t *)p1;
     worker->source = CMD_SOURCE_ZIGBEE;
     worker->tx_msg = get_zigbee_tx_msgq();
 
@@ -137,13 +137,9 @@ void zigbee_rx_thread_entry(void *p1, void *p2, void *p3) {
             tx_msg.len = reply_len;
             if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
                 LOG_WRN("Zigbee TX queue full");
-            } else {
-                LOG_INF("Zigbee reply enqueued");
             }
         }
     }
-    /* 不可达，保留占位 */
-    free_worker(worker);
 }
 
 /* ---------- 发送线程 ---------- */

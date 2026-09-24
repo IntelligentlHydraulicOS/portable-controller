@@ -4,14 +4,16 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <zephyr/kernel.h>
+#include "timer.h"
 
 #define CMD_SOURCE_BT     0
 #define CMD_SOURCE_ZIGBEE 1
 #define CMD_SOURCE_RS485  2
 
 typedef struct {
-    struct k_timer timer_heartbeat;
-    struct k_timer timer_action;
+    work_timer_t timer_heartbeat;
+    work_timer_t timer_action;
+
     struct k_msgq *tx_msg;
     uint8_t local_id;
     uint8_t action_id;

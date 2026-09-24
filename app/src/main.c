@@ -19,6 +19,8 @@
 #include <zephyr/sys/notify.h>
 #include "battery_scan.h"
 #include "proto_config.h"
+#include "led_strip.h"
+#include "led_control.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -30,13 +32,18 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 #define RS485_RX_PRIORITY  5
 #define RS485_TX_PRIORITY  4
 
+#define LED_THREAD_STACK_SIZE  1024
+#define LED_THREAD_PRIORITY    7
+
 K_THREAD_STACK_DEFINE(bt_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(bt_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(zigbee_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(zigbee_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_tx_stack, THREAD_STACK_SIZE);
+K_THREAD_STACK_DEFINE(led_stack, LED_THREAD_STACK_SIZE);
 
+static struct k_thread led_thread_data;
 static struct k_thread bt_rx_thread_data;
 static struct k_thread bt_tx_thread_data;
 static struct k_thread zigbee_rx_thread_data;
@@ -60,7 +67,7 @@ int mount_log_fs(void)
 {
     int rc = fs_mount(&mp);
     if (rc == 0) {
-        LOG_ERR("LittleFS mounted on /lfs");
+        LOG_INF("LittleFS mounted on /lfs");
         return 0;
     }
     if (rc == -EBUSY) {
@@ -120,6 +127,10 @@ int main(void) {
     }
     battery_monitor_set_charge_state(false);
 
+    if (led_control_init() != 0) {
+        LOG_ERR("LED control init failed");
+    }
+
     bool ble_enabled, zigbee_enabled;
     proto_config_load(&ble_enabled, &zigbee_enabled);
     LOG_INF("Protocol config: BLE=%d Zigbee=%d", ble_enabled, zigbee_enabled);
@@ -163,29 +174,30 @@ int main(void) {
 
     LOG_INF("=== init done, start thread ===");
 
+    worker_t *worker = get_worker();
     if (ble_enabled) {
         k_thread_create(&bt_rx_thread_data, bt_rx_stack,
                         K_THREAD_STACK_SIZEOF(bt_rx_stack),
-                        ble_rx_thread_entry, NULL, NULL, NULL,
+                        ble_rx_thread_entry, worker, NULL, NULL,
                         BT_RX_PRIORITY, 0, K_NO_WAIT);
         k_thread_name_set(&bt_rx_thread_data, "BT_RX");
 
         k_thread_create(&bt_tx_thread_data, bt_tx_stack,
                         K_THREAD_STACK_SIZEOF(bt_tx_stack),
-                        ble_tx_thread_entry, NULL, NULL, NULL,
+                        ble_tx_thread_entry, worker, NULL, NULL,
                         BT_TX_PRIORITY, 0, K_NO_WAIT);
         k_thread_name_set(&bt_tx_thread_data, "BT_TX");
     }else{
         if( zigbee_enabled){
-            k_thread_create(&zigbee_rx_thread_data, zigbee_rx_stack,
+                         k_thread_create(&zigbee_rx_thread_data, zigbee_rx_stack,
                             K_THREAD_STACK_SIZEOF(zigbee_rx_stack),
-                            zigbee_rx_thread_entry, NULL, NULL, NULL,
+                            zigbee_rx_thread_entry, worker, NULL, NULL,
                             ZIGBEE_RX_PRIORITY, 0, K_NO_WAIT);
             k_thread_name_set(&zigbee_rx_thread_data, "ZIG_RX");
 
             k_thread_create(&zigbee_tx_thread_data, zigbee_tx_stack,
                             K_THREAD_STACK_SIZEOF(zigbee_tx_stack),
-                            zigbee_tx_thread_entry, NULL, NULL, NULL,
+                            zigbee_tx_thread_entry, worker, NULL, NULL,
                             ZIGBEE_TX_PRIORITY, 0, K_NO_WAIT);
             k_thread_name_set(&zigbee_tx_thread_data, "ZIG_TX");
         }else{
@@ -196,16 +208,23 @@ int main(void) {
 
     k_thread_create(&rs485_rx_thread_data, rs485_rx_stack,
                     K_THREAD_STACK_SIZEOF(rs485_rx_stack),
-                    rs485_rx_thread_entry, NULL, NULL, NULL,
+                    rs485_rx_thread_entry, worker, NULL, NULL,
                     RS485_RX_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(&rs485_rx_thread_data, "RS485_RX");
 
     k_thread_create(&rs485_tx_thread_data, rs485_tx_stack,
                     K_THREAD_STACK_SIZEOF(rs485_tx_stack),
-                    rs485_tx_thread_entry, NULL, NULL, NULL,
+                    rs485_tx_thread_entry, worker, NULL, NULL,
                     RS485_TX_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(&rs485_tx_thread_data, "RS485_TX");
 
+    k_thread_create(&led_thread_data, led_stack,
+                    K_THREAD_STACK_SIZEOF(led_stack),
+                    led_thread_entry, NULL, NULL, NULL,
+                    LED_THREAD_PRIORITY, 0, K_NO_WAIT);
+    k_thread_name_set(&led_thread_data, "LED_CTL");
+
+    LOG_INF("LED control thread started");
     if (thread_pool_init() != 0) {
         LOG_ERR("thread pool init failed");
         return -1;
@@ -213,6 +232,8 @@ int main(void) {
 
     // thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
     // thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
+    // thread_pool_submit(strip_control_test_thread,  NULL, K_NO_WAIT);
+
     LOG_INF("All threads created");
 
     // battery_scan_timer(ble_enabled, zigbee_enabled);
@@ -222,5 +243,8 @@ int main(void) {
     {
         k_sleep(K_SECONDS(10));
     }
+
+    //unreachable code, but if we ever exit the main thread, clean up the worker
+    free_worker(worker);
     return 0;
 }

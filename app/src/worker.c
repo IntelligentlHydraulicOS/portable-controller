@@ -9,6 +9,7 @@
 #include "log.h"
 #include "thread_pool.h"
 #include <zephyr/kernel.h>
+#include "led_control.h"
 
 uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
@@ -30,8 +31,8 @@ worker_t *get_worker(void) {
     }else{
         memset(worker, 0, sizeof(worker_t));
         init_worker(worker);
-        k_timer_init(&worker->timer_heartbeat, timer_heartbeat_expiry_cb, NULL);
-        k_timer_init(&worker->timer_action, timer_action_expiry_cb, NULL);
+        init_work_timer(&worker->timer_heartbeat, 1000, timer_heartbeat_expiry_cb);
+        init_work_timer(&worker->timer_action, 200, timer_action_expiry_cb);
     }
 
     return worker;    
@@ -78,13 +79,13 @@ uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, u
 
     if (data[3] == 0){
         worker->is_ready = false;
-        k_timer_stop(&worker->timer_heartbeat);
-        k_timer_stop(&worker->timer_action);
+        stop_work_timer(&worker->timer_heartbeat);
+        stop_work_timer(&worker->timer_action);
         worker->action_id = 0;
         uint8_t controller_id = data[len -2];
         worker->controller_id = controller_id;
         worker->is_connected = true;
-        k_timer_start(&worker->timer_heartbeat, K_SECONDS(1), K_SECONDS(1));
+        start_work_timer(&worker->timer_heartbeat);
         snprintf((char *)reply, TX_MSG_MAX_DATA, "connect to controller %u", worker->controller_id);
         *reply_len = strlen((char *)reply);
         return 1;
@@ -116,7 +117,7 @@ uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
     worker->is_ready = true;
 
     // action depends on the remote controller
-    k_timer_start(&worker->timer_action, K_MSEC(5000), K_SECONDS(10));
+    start_work_timer(&worker->timer_action);
     snprintf((char *)reply, TX_MSG_MAX_DATA, "Action %u chosen", action_id);
     *reply_len = strlen((char *)reply);
     return 1;
@@ -137,7 +138,7 @@ uint8_t cancel_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
     if (is_worker_ready(worker)) {
         worker->action_id = 0;
         worker->is_ready = false;
-        k_timer_stop(&worker->timer_action);
+        stop_work_timer(&worker->timer_action);
         snprintf((char *)reply, TX_MSG_MAX_DATA, "Action canceled");
         *reply_len = strlen((char *)reply); 
         return 1;
@@ -196,7 +197,10 @@ uint8_t do_work(worker_t *worker, uint8_t *data, size_t len,
         return 0;
     }
 
-    uint8_t cmd = data[2];    
+    uint8_t cmd = data[2]; 
+    //TODO change to bee
+    led_control_blink_alt(255, 0, 0,   0, 0, 255,   250);
+
     for (int i = 0; g_command_handlers[i].handler != NULL; i++) {
         if (g_command_handlers[i].id == cmd) {
             response = g_command_handlers[i].handler(worker, data, len, reply, reply_len);

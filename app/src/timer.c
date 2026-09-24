@@ -6,15 +6,56 @@
 #include "worker.h"
 #include "timer.h"
 #include "action.h"
+#include "led_strip.h"
 
 LOG_MODULE_REGISTER(timer, LOG_LEVEL_INF);
 
-static int index = 0;
+static int test_index = 0;
 static struct k_timer test_timer;
 
-void timer_heartbeat_expiry_cb(struct k_timer *timer_id)
+int init_work_timer(work_timer_t *work_timer, int period_msecond, void (*callback)(struct k_timer *timer))
 {
-    worker_t *worker = CONTAINER_OF(timer_id, worker_t, timer_heartbeat);
+    if (work_timer == NULL || callback == NULL || period_msecond < 0) {
+        return -EINVAL;
+    }
+
+    work_timer->is_active = false;
+    work_timer->period_msecond = period_msecond;
+    k_timer_init(&work_timer->timer, callback, NULL);
+
+    return 0;
+}
+
+int start_work_timer(work_timer_t *work_timer)
+{
+    if (work_timer == NULL) {
+        return -EINVAL;
+    }
+
+    if (!work_timer->is_active) {
+        k_timer_start(&work_timer->timer, K_MSEC(1), K_MSEC(work_timer->period_msecond));
+        work_timer->is_active = true;
+    }
+    return 0;
+}
+
+int stop_work_timer(work_timer_t *work_timer)
+{
+    if (work_timer == NULL) {
+        return -EINVAL;
+    }
+
+    if (work_timer->is_active) {
+        k_timer_stop(&work_timer->timer);
+        work_timer->is_active = false;
+    }
+    return 0;
+}
+
+void timer_heartbeat_expiry_cb(struct k_timer *timer)
+{
+    work_timer_t *wt = CONTAINER_OF(timer, work_timer_t, timer);
+    worker_t *worker = CONTAINER_OF(wt, worker_t, timer_heartbeat);
 
     struct tx_msg tx_msg;
     memset(&tx_msg, 0, sizeof(tx_msg));
@@ -31,7 +72,7 @@ void timer_heartbeat_expiry_cb(struct k_timer *timer_id)
     if (k_msgq_put(worker->tx_msg, &tx_msg, K_NO_WAIT) != 0) {
         LOG_WRN("TX queue full");
     } else {
-        LOG_INF("reply enqueued");
+        LOG_DBG("reply enqueued");
     }
 }
 
@@ -54,11 +95,21 @@ void setControlTxBuf(uint8_t *uiBuf, uint32_t channel)
 	uiBuf[3] = channel & 0xff;
 }
 
-void timer_action_expiry_cb(struct k_timer *timer_id)
+void timer_action_expiry_cb(struct k_timer *timer)
 {
-    worker_t *worker = CONTAINER_OF(timer_id, worker_t, timer_action);
+    work_timer_t *wt = CONTAINER_OF(timer, work_timer_t, timer);
+    worker_t *worker = CONTAINER_OF(wt, worker_t, timer_action);
+
+    static bool is_set = false;
+
+    if (is_set) {
+        stop_work_timer(&worker->timer_action);
+        is_set = false;
+    }
+    is_set = true;
 
     uint8_t channel_offset = get_channel_offset_by_action_id(worker->action_id);
+    LOG_INF("channel_offset: %u", channel_offset);
     if (channel_offset != 0xFF) {
         uint32_t channel = 1 << channel_offset;
         struct tx_msg tx_msg;
@@ -77,7 +128,7 @@ void timer_action_expiry_cb(struct k_timer *timer_id)
         if (k_msgq_put(get_rs485_tx_msgq(), &tx_msg, K_NO_WAIT) != 0) {
             LOG_WRN("TX queue full");
         } else {
-            LOG_INF("reply enqueued");
+            LOG_DBG("reply enqueued");
         }
     } else {
         LOG_WRN("Invalid action_id: %u", worker->action_id);
@@ -89,7 +140,7 @@ void test_timer_action_expiry_cb(struct k_timer *timer)
     ARG_UNUSED(timer);
     struct tx_msg tx_msg;
 
-    int channel = 1 << index++;
+    int channel = 1 << test_index++;
     memset(&tx_msg.data, 0, TX_MSG_MAX_DATA);
     tx_msg.data[0] = 0x55;
     tx_msg.data[1] = 0xAA;
@@ -115,8 +166,8 @@ void timer_test_thread(void *args)
     k_timer_start(&test_timer, K_SECONDS(1), K_SECONDS(30));
 
     while (1) {
-        if (index >= 28) {
-            index = 0; // Reset index after reaching 28
+        if (test_index >= 28) {
+            test_index = 0; // Reset test_index after reaching 28
         }
         k_sleep(K_SECONDS(1));
     }
