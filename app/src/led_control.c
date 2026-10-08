@@ -21,12 +21,12 @@ static void apply_current(void)
         break;
 
     case LED_MODE_STATIC:
-        set_all_pixels(current.c1_g, current.c1_r,  current.c1_b);
+        set_all_pixels(current.c1_r, current.c1_g,  current.c1_b);
         break;
 
     case LED_MODE_BLINK:
         if (phase_on) {
-            set_all_pixels(current.c1_g, current.c1_r,  current.c1_b);
+            set_all_pixels(current.c1_r, current.c1_g,  current.c1_b);
         } else {
             set_all_pixels(0, 0, 0);
         }
@@ -34,9 +34,9 @@ static void apply_current(void)
 
     case LED_MODE_BLINK_ALT:
         if (phase_on) {
-            set_all_pixels(current.c1_g, current.c1_r,  current.c1_b);
+            set_all_pixels(current.c1_r, current.c1_g,  current.c1_b);
         } else {
-            set_all_pixels( current.c2_g, current.c2_r, current.c2_b);
+            set_all_pixels( current.c2_r, current.c2_g, current.c2_b);
         }
         break;
 
@@ -78,7 +78,6 @@ void led_thread_entry(void *p1, void *p2, void *p3)
         }
 
         int ret = k_msgq_get(&led_msgq, &msg, timeout);
-
         if (ret == 0) {
             if (msg.half_period_ms == 0) {
                 msg.half_period_ms = LED_DEFAULT_HALF_MS;
@@ -86,9 +85,7 @@ void led_thread_entry(void *p1, void *p2, void *p3)
             current = msg;
             phase_on = true;
             apply_current();
-
-            LOG_INF("LED mode=%d period=%ums", current.mode,
-                    current.half_period_ms);
+            LOG_INF("LED mode=%d period=%ums", current.mode, current.half_period_ms);
         } else {
             phase_on = !phase_on;
             apply_current();
@@ -155,4 +152,45 @@ int led_control_blink_alt(uint8_t r1, uint8_t g1, uint8_t b1,
         .half_period_ms = half_period_ms,
     };
     return led_control_send(&m);
+}
+
+void led_control_test_thread(void *args)
+{
+    struct led_msg m;
+    while(1){
+        k_sleep(K_SECONDS(2));
+        m.mode = LED_MODE_BLINK;
+        m.c1_r = 30; m.c1_g = 0; m.c1_b = 0;
+        m.half_period_ms = 500;
+        led_control_send(&m);
+
+        k_sleep(K_SECONDS(4));
+        m.mode = LED_MODE_BLINK_ALT;
+        m.c1_r = 30; m.c1_g = 0; m.c1_b = 0;
+        m.c2_r = 0; m.c2_g = 30; m.c2_b = 0;
+        m.half_period_ms = 500;
+        led_control_send(&m);
+
+        k_sleep(K_SECONDS(4));
+        m.mode = LED_MODE_OFF;
+        led_control_send(&m);
+
+
+        m.mode = LED_MODE_BLINK;
+        m.c1_r = 0; m.c1_g = 30; m.c1_b = 0;
+        m.half_period_ms = 500;
+        led_control_send(&m);
+
+        k_sleep(K_SECONDS(4));
+        m.mode = LED_MODE_BLINK_ALT;
+        m.c1_r = 0; m.c1_g = 30; m.c1_b = 0;
+        m.c2_r = 0; m.c2_g = 0; m.c2_b = 30;
+        m.half_period_ms = 500;
+        led_control_send(&m);
+
+        k_sleep(K_SECONDS(4));
+        m.mode = LED_MODE_OFF;
+        led_control_send(&m);
+
+    }
 }

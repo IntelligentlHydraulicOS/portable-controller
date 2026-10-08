@@ -30,6 +30,7 @@ typedef enum {
 } ble_state_t;
 
 static ble_state_t ble_state = BLE_ST_DISCONNECTED;
+static void update_led_from_state(void);
 
 /* ---------- 广播数据 ---------- */
 static const struct bt_data ad[] = {
@@ -71,6 +72,12 @@ static void custom_notify_ccc_cfg_changed(const struct bt_gatt_attr *attr,
     ARG_UNUSED(attr);
     notify_subscribed = (value == BT_GATT_CCC_NOTIFY);
     LOG_INF("Custom Notify %s", notify_subscribed ? "subscribed" : "unsubscribed");
+    if (notify_subscribed){
+        ble_state = BLE_ST_NUS_READY;
+    }else{
+        ble_state = BLE_ST_CONNECTED;
+    }
+    update_led_from_state();
 }
 
 static void custom_indicate_ccc_cfg_changed(const struct bt_gatt_attr *attr,
@@ -79,6 +86,12 @@ static void custom_indicate_ccc_cfg_changed(const struct bt_gatt_attr *attr,
     ARG_UNUSED(attr);
     indicate_subscribed = (value == BT_GATT_CCC_INDICATE);
     LOG_INF("Custom Indicate %s", indicate_subscribed ? "subscribed" : "unsubscribed");
+    if (indicate_subscribed){
+        ble_state = BLE_ST_NUS_READY;
+    }else{
+        ble_state = BLE_ST_CONNECTED;
+    }
+    update_led_from_state();
 }
 
 BT_GATT_SERVICE_DEFINE(custom_svc,
@@ -412,7 +425,7 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3)
         if (err < 0 ) {
             if( msg.type == BLE_TX_NOTIFY || msg.type == BLE_TX_NUS) {
                 fail_send_counter++;
-                if (fail_send_counter >= 10) {
+                if (fail_send_counter >= 5) {
                     stop_work_timer(&worker->timer_heartbeat);
                     stop_work_timer(&worker->timer_action);
                     fail_send_counter = 0;
@@ -420,6 +433,8 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3)
                     if (current_conn) {
                         bt_conn_disconnect(current_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); 
                     }
+                    ble_state = BLE_ST_DISCONNECTED;
+                    update_led_from_state();
                 }
             } else{
                 LOG_ERR("ble_send failed (type=%d, err=%d)", msg.type, err);

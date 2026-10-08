@@ -12,9 +12,8 @@ static const struct device *strip = DEVICE_DT_GET(STRIP_NODE);
 #define PIXEL_COUNT 2
 static struct led_rgb pixels[PIXEL_COUNT];
 
-void set_all_pixels(uint8_t r, uint8_t g, uint8_t b)
+void set_all_pixels(uint8_t g, uint8_t r, uint8_t b)
 {
-    //r and g should be rotate
     for (int i = 0; i < PIXEL_COUNT; i++) {
         pixels[i].g = g;
         pixels[i].r = r;

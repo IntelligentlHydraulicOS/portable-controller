@@ -19,6 +19,7 @@ struct led_msg {
     uint32_t half_period_ms;    /* 两次切换之间的时间，0 视为默认 500ms */
 };
 
+void led_control_test_thread(void *args);
 void led_thread_entry(void *p1, void *p2, void *p3);
 int led_control_init(void);
 int led_control_send(const struct led_msg *msg);
