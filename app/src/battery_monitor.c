@@ -3,13 +3,14 @@
 #include <zephyr/drivers/adc.h>
 #include <zephyr/logging/log.h>
 #include "battery_monitor.h"
+#include "led_control.h"
 
 LOG_MODULE_REGISTER(battery_monitor, LOG_LEVEL_INF);
 
 static const struct adc_dt_spec adc_ch =
     ADC_DT_SPEC_GET(DT_PATH(zephyr_user));
 
-static bool is_charging = false;
+static battery_state_t battery_state = BAT_STATE_DISCHARGING;
 
 /* ========== 硬件分压系数 ==========
  * 电池电压 = V(P1.07) * (4/3) * (27.87 / 7.87)
@@ -100,10 +101,18 @@ int battery_monitor_init(void)
     return 0;
 }
 
-void battery_monitor_set_charge_state(bool charging)
+void battery_monitor_set_charge_state(battery_state_t state)
 {
-    is_charging = charging;
-    LOG_INF("Battery state: %s", charging ? "Charging" : "Discharging");
+    //TODO how to get charger state, maybe use GPIO to detect charger state
+    battery_state = state;
+    LOG_INF("Battery state: %s", battery_state == BAT_STATE_CHARGING ? "Charging" : "Discharging");
+    if(battery_state == BAT_STATE_CHARGING){
+        //red -> blue ->red
+        led_control_blink_alt(255, 0, 0,   0, 0, 255,   250);
+    }else if(battery_state == BAT_STATE_FULL){
+        //yellow
+        led_control_static(255, 255, 0);
+    }
 }
 
 int battery_monitor_get_voltage(int *voltage_mv)
@@ -154,8 +163,8 @@ int battery_monitor_get_capacity(int *capacity_pct)
         return ret;
     }
 
-    const int (*table)[2] = is_charging ? cp_table : dp_table;
-    size_t size = is_charging ? CP_TABLE_SIZE : DP_TABLE_SIZE;
+    const int (*table)[2] = battery_state == BAT_STATE_CHARGING ? cp_table : dp_table;
+    size_t size = battery_state == BAT_STATE_CHARGING ? CP_TABLE_SIZE : DP_TABLE_SIZE;
 
     *capacity_pct = voltage_to_soc(table, size, voltage_mv);
     return 0;
