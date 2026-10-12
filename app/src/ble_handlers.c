@@ -455,11 +455,11 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3)
                 if (fail_send_counter >= 5) {
                     stop_work_timer(&worker->timer_heartbeat);
                     stop_work_timer(&worker->timer_action);
-                    fail_send_counter = 0;
-                    LOG_ERR("BLE TX NOYTIFY failed 10 times, resetting connection");
+                    LOG_ERR("BLE TX NOYTIFY failed %d times, resetting connection", fail_send_counter);
                     if (current_conn) {
                         bt_conn_disconnect(current_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); 
                     }
+                    fail_send_counter = 0;
                     ble_state = BLE_ST_DISCONNECTED;
                     update_led_from_state();
                 }
