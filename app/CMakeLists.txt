@@ -9,8 +9,12 @@ set(LFS_IMAGE ${CMAKE_BINARY_DIR}/lfs.bin)
 add_custom_command(
     OUTPUT ${LFS_IMAGE}
     COMMAND mklittlefs
-    ARGS -c ${CMAKE_SOURCE_DIR}/fs_content -b 4096 -p 64 -s 0x9000 ${LFS_IMAGE}
+    ARGS -c ${CMAKE_SOURCE_DIR}/fs_content
+         -b 4096
+         -p 16
+         -s 0x55000
+         ${LFS_IMAGE}
     DEPENDS ${CMAKE_SOURCE_DIR}/fs_content
-    COMMENT "Generating LittleFS image..."
+    COMMENT "Generating LittleFS image (340KB)..."
 )
 add_custom_target(lfs_image ALL DEPENDS ${LFS_IMAGE})

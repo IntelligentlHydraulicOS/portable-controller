@@ -21,6 +21,7 @@
 #include "led_strip.h"
 #include "led_control.h"
 #include "bee.h"
+#include "nfc_handlers.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -34,6 +35,7 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 #define LED_THREAD_STACK_SIZE  1024
 #define LED_THREAD_PRIORITY    7
+#define NFC_THREAD_PRIORITY    6    
 
 K_THREAD_STACK_DEFINE(bt_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(bt_tx_stack, THREAD_STACK_SIZE);
@@ -42,6 +44,7 @@ K_THREAD_STACK_DEFINE(zigbee_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_rx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(rs485_tx_stack, THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(led_stack, LED_THREAD_STACK_SIZE);
+K_THREAD_STACK_DEFINE(nfc_stack, THREAD_STACK_SIZE);
 
 static struct k_thread led_thread_data;
 static struct k_thread bt_rx_thread_data;
@@ -50,6 +53,7 @@ static struct k_thread zigbee_rx_thread_data;
 static struct k_thread zigbee_tx_thread_data;
 static struct k_thread rs485_rx_thread_data;
 static struct k_thread rs485_tx_thread_data;
+static struct k_thread nfc_thread_data;
 
 static protocol_t current_proto = PROTO_NONE;
 
@@ -58,7 +62,7 @@ struct fs_littlefs lfs_data;
 struct fs_mount_t mp = {
     .type = FS_LITTLEFS,
     .mnt_point = "/lfs",
-    .storage_dev = (void *)PARTITION_ID(storage_partition),
+    .storage_dev = (void *)PARTITION_ID(littlefs_storage_partition),
     .fs_data = &lfs_data,
     .flags = 0,
 };
@@ -78,7 +82,7 @@ int mount_log_fs(void)
 
     LOG_WRN("Mount failed (%d), formatting...", rc);
     rc = fs_mkfs(FS_LITTLEFS,
-                 (uintptr_t)PARTITION_ID(storage_partition),
+                 (uintptr_t)PARTITION_ID(littlefs_storage_partition),
                  NULL, 0);
     if (rc != 0) {
         LOG_ERR("Format failed (%d)", rc);
@@ -133,6 +137,12 @@ int main(void) {
     }
     if (buzzer_init() != 0) {
         LOG_ERR("Buzzer init failed");
+    }
+
+    // init Settings for NFC and BLE
+    ret = settings_subsys_init();
+    if (ret) {
+        LOG_ERR("Settings init failed: %d", ret);
     }
 
     bool ble_enabled, zigbee_enabled;
@@ -227,6 +237,13 @@ int main(void) {
                     led_thread_entry, NULL, NULL, NULL,
                     LED_THREAD_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(&led_thread_data, "LED_CTL");
+
+    k_thread_create(&nfc_thread_data, nfc_stack,
+                    K_THREAD_STACK_SIZEOF(nfc_stack),
+                    nfc_thread_entry, worker, NULL, NULL,
+                    NFC_THREAD_PRIORITY, 0, K_NO_WAIT);
+    k_thread_name_set(&nfc_thread_data, "NFC_TASK");
+    LOG_INF("NFC thread created");
 
     LOG_INF("LED control thread started");
     if (thread_pool_init() != 0) {

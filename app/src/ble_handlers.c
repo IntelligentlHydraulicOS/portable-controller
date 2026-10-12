@@ -5,6 +5,8 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/services/nus.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/settings/settings.h>
+#include <zephyr/bluetooth/addr.h>
 #include <string.h>
 #include "message.h"
 #include "led_control.h"
@@ -13,6 +15,7 @@ LOG_MODULE_REGISTER(ble, LOG_LEVEL_INF);
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
+#define SETTINGS_MAC_KEY "ble/mac"
 
 /* ---------- NUS 实例定义（Zephyr 原生 API） ---------- */
 BT_NUS_INST_DEFINE(nus_inst);
@@ -310,6 +313,29 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
     .recycled = recycled_cb,
 };
 
+
+static void ble_apply_custom_mac(void)
+{
+    uint8_t mac[6];
+    ssize_t len = settings_load_one(SETTINGS_MAC_KEY, mac, sizeof(mac));
+
+    if (len == sizeof(mac)) {
+        bt_addr_le_t addr = {0};
+        addr.type = BT_ADDR_LE_RANDOM; // 使用随机静态地址避免冲突
+        memcpy(addr.a.val, mac, 6);
+
+        int err = bt_id_create(&addr, NULL);
+        if (err < 0) {
+            LOG_ERR("Failed to create custom BT ID (err: %d)", err);
+        } else {
+            LOG_INF("Custom MAC applied: %02X:%02X:%02X:%02X:%02X:%02X",
+                    mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
+        }
+    } else {
+        LOG_INF("No custom MAC found, using default");
+    }
+}
+
 /* ---------- 初始化 ---------- */
 int ble_init(void)
 {
@@ -322,6 +348,8 @@ int ble_init(void)
         return err;
     }
     LOG_DBG("BLE init bt_nus_inst_cb_register done");
+    
+    ble_apply_custom_mac();
 
     err = bt_enable(NULL);
     if (err) {

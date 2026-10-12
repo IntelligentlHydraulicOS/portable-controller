@@ -2,6 +2,10 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <zephyr/dt-bindings/led/led.h>
 / {
+    chosen {
+        zephyr,settings-nvs-partition = &storage_partition;
+    };
+
     zephyr,user {
         io-channels = <&adc 3>;
         buzzer-gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
@@ -85,5 +89,22 @@
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,input-positive = <NRF_SAADC_AIN3>;
         zephyr,resolution = <12>;
+    };
+};
+
+/delete-node/ &slot0_ns_partition;
+
+&cpuapp_rram {
+    partitions {
+        slot0_ns_partition: partition@8a000 {
+            label = "image-0";
+            reg = <0x8a000 0x96000>;
+        };
+
+        littlefs_storage_partition: partition@120000 {
+            compatible = "zephyr,mapped-partition";
+            label = "littlefs_storage";
+            reg = <0x120000 0x55000>;
+        };
     };
 };
