@@ -10,6 +10,7 @@
 #include "thread_pool.h"
 #include <zephyr/kernel.h>
 #include "led_control.h"
+#include "bee.h"
 
 uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
@@ -33,6 +34,7 @@ worker_t *get_worker(void) {
         init_worker(worker);
         init_work_timer(&worker->timer_heartbeat, 1000, timer_heartbeat_expiry_cb);
         init_work_timer(&worker->timer_action, 200, timer_action_expiry_cb);
+        init_work_timer(&worker->timer_bee, 300, timer_bee_expiry_cb);
     }
 
     return worker;    
@@ -81,6 +83,7 @@ uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, u
         worker->is_ready = false;
         stop_work_timer(&worker->timer_heartbeat);
         stop_work_timer(&worker->timer_action);
+        stop_work_timer(&worker->timer_bee);
         worker->action_id = 0;
         uint8_t controller_id = data[len -2];
         worker->controller_id = controller_id;
@@ -118,6 +121,7 @@ uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
 
     // action depends on the remote controller
     start_work_timer(&worker->timer_action);
+    start_work_timer(&worker->timer_bee);
     snprintf((char *)reply, TX_MSG_MAX_DATA, "Action %u chosen", action_id);
     *reply_len = strlen((char *)reply);
     return 1;
@@ -139,6 +143,7 @@ uint8_t cancel_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
         worker->action_id = 0;
         worker->is_ready = false;
         stop_work_timer(&worker->timer_action);
+        stop_work_timer(&worker->timer_bee);
         snprintf((char *)reply, TX_MSG_MAX_DATA, "Action canceled");
         *reply_len = strlen((char *)reply); 
         return 1;
@@ -198,9 +203,6 @@ uint8_t do_work(worker_t *worker, uint8_t *data, size_t len,
     }
 
     uint8_t cmd = data[2]; 
-    //TODO change to bee
-    led_control_blink_alt(255, 0, 0,   0, 0, 255,   250);
-
     for (int i = 0; g_command_handlers[i].handler != NULL; i++) {
         if (g_command_handlers[i].id == cmd) {
             response = g_command_handlers[i].handler(worker, data, len, reply, reply_len);

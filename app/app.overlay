@@ -4,6 +4,7 @@
 / {
     zephyr,user {
         io-channels = <&adc 3>;
+        buzzer-gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
     };
 
     aliases {

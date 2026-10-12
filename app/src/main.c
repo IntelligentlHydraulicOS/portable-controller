@@ -6,7 +6,6 @@
 #include <zephyr/fs/fs.h>
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/flash.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/fs/littlefs.h>
 #include <zephyr/logging/log.h>
@@ -21,6 +20,7 @@
 #include "proto_config.h"
 #include "led_strip.h"
 #include "led_control.h"
+#include "bee.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -125,10 +125,14 @@ int main(void) {
     if (ret < 0) {
         LOG_ERR("Battery monitor init failed: %d", ret);
     }
-    battery_monitor_set_charge_state(false);
+    //TODO: set battery state based on GPIO or charger detection
+    battery_monitor_set_charge_state(BAT_STATE_DISCHARGING);
 
     if (led_control_init() != 0) {
         LOG_ERR("LED control init failed");
+    }
+    if (buzzer_init() != 0) {
+        LOG_ERR("Buzzer init failed");
     }
 
     bool ble_enabled, zigbee_enabled;

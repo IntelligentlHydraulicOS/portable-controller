@@ -13,6 +13,7 @@
 typedef struct {
     work_timer_t timer_heartbeat;
     work_timer_t timer_action;
+    work_timer_t timer_bee;
 
     struct k_msgq *tx_msg;
     uint8_t local_id;

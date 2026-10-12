@@ -1,7 +1,6 @@
 #include "ble_handlers.h"
 #include "worker.h"
 #include "rs485_handlers.h"
-#include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/services/nus.h>

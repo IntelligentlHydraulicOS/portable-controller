@@ -7,6 +7,7 @@
 #include "timer.h"
 #include "action.h"
 #include "led_strip.h"
+#include "bee.h"
 
 LOG_MODULE_REGISTER(timer, LOG_LEVEL_INF);
 
@@ -31,11 +32,9 @@ int start_work_timer(work_timer_t *work_timer)
     if (work_timer == NULL) {
         return -EINVAL;
     }
-
-    if (!work_timer->is_active) {
-        k_timer_start(&work_timer->timer, K_MSEC(1), K_MSEC(work_timer->period_msecond));
-        work_timer->is_active = true;
-    }
+    atomic_set(&work_timer->pending_cmds, 1);
+    work_timer->is_active = true;
+    k_timer_start(&work_timer->timer, K_MSEC(1), K_MSEC(work_timer->period_msecond));
     return 0;
 }
 
@@ -49,6 +48,8 @@ int stop_work_timer(work_timer_t *work_timer)
         k_timer_stop(&work_timer->timer);
         work_timer->is_active = false;
     }
+    atomic_set(&work_timer->pending_cmds, 0);
+
     return 0;
 }
 
@@ -100,13 +101,11 @@ void timer_action_expiry_cb(struct k_timer *timer)
     work_timer_t *wt = CONTAINER_OF(timer, work_timer_t, timer);
     worker_t *worker = CONTAINER_OF(wt, worker_t, timer_action);
 
-    static bool is_set = false;
-
-    if (is_set) {
+    if (wt->is_active) {
         stop_work_timer(&worker->timer_action);
-        is_set = false;
+        wt->is_active = false;
     }
-    is_set = true;
+    wt->is_active = true;
 
     uint8_t channel_offset = get_channel_offset_by_action_id(worker->action_id);
     LOG_INF("channel_offset: %u", channel_offset);
@@ -132,6 +131,25 @@ void timer_action_expiry_cb(struct k_timer *timer)
         }
     } else {
         LOG_WRN("Invalid action_id: %u", worker->action_id);
+    }
+}
+
+void timer_bee_expiry_cb(struct k_timer *timer)
+{    
+    ARG_UNUSED(timer);
+    work_timer_t *wt = CONTAINER_OF(timer, work_timer_t, timer);
+    worker_t *worker = CONTAINER_OF(wt, worker_t, timer_bee);
+
+    bool from_cmd = atomic_cas(&wt->pending_cmds, 1, 0);
+    if(from_cmd){
+        LOG_DBG("Bee timer triggered by command");
+        wt->is_active = true;
+        buzzer_on();
+    }else{
+        LOG_DBG("Bee timer triggered by expiry");
+        buzzer_off();
+        stop_work_timer(&worker->timer_bee);
+        wt->is_active = false;
     }
 }
 
