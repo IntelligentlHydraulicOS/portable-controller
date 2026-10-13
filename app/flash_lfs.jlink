@@ -2,8 +2,8 @@ device nRF54L15_M33
 si SWD
 speed 4000
 connect
-loadbin build/app/lfs.bin 0x120000
-verifybin build/app/lfs.bin 0x120000
+loadbin build/app/lfs.bin 0xE2800
+verifybin build/app/lfs.bin 0xE2800
 r
 g
 exit

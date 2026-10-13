@@ -84,7 +84,7 @@
 
     channel@3 {
         reg = <3>;
-        zephyr,gain = "ADC_GAIN_1_6";
+        zephyr,gain = "ADC_GAIN_1_4";
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,input-positive = <NRF_SAADC_AIN3>;
@@ -92,19 +92,49 @@
     };
 };
 
-/delete-node/ &slot0_ns_partition;
+&nfct {
+    status = "okay";
+};
+
+/* ================================================================
+ * 分区（保留 FLPR 预留）：
+ *   boot 62K / slot0 400K / slot1 400K / NVS 44K / LittleFS 520K
+ * ================================================================ */
+// /delete-node/ &boot_partition;
+/delete-node/ &slot0_partition;
+/delete-node/ &slot1_partition;
+/delete-node/ &storage_partition;
 
 &cpuapp_rram {
     partitions {
-        slot0_ns_partition: partition@8a000 {
+        // boot_partition: partition@0 {
+        //     compatible = "zephyr,mapped-partition";
+        //     label = "mcuboot";
+        //     reg = <0x0 0xF800>;        /* 62KB */
+        // };
+
+        slot0_partition: partition@F800 {
+            compatible = "zephyr,mapped-partition";
             label = "image-0";
-            reg = <0x8a000 0x96000>;
+            reg = <0x10000 0x63C00>;    /* 408KB */
         };
 
-        littlefs_storage_partition: partition@120000 {
+        slot1_partition: partition@73800 {
+            compatible = "zephyr,mapped-partition";
+            label = "image-1";
+            reg = <0x73C00 0x63C00>;   /* 约408KB */
+        };
+
+        storage_partition: partition@D7800 {
+            compatible = "zephyr,mapped-partition";
+            label = "storage";
+            reg = <0xD7800 0xB000>;    /* 44KB */
+        };
+
+        littlefs_storage_partition: partition@E2800 {
             compatible = "zephyr,mapped-partition";
             label = "littlefs_storage";
-            reg = <0x120000 0x55000>;
+            reg = <0xE2800 0x82000>;   /* 520KB */
         };
     };
 };
