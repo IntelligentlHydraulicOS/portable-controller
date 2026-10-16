@@ -12,11 +12,13 @@ static const struct device *strip = DEVICE_DT_GET(STRIP_NODE);
 #define PIXEL_COUNT 2
 static struct led_rgb pixels[PIXEL_COUNT];
 
-void set_all_pixels(uint8_t g, uint8_t r, uint8_t b)
+void set_all_pixels(uint8_t r, uint8_t g, uint8_t b)
 {
+    LOG_INF("set_all_pixels: r=%u g=%u b=%u", r, g, b);
     for (int i = 0; i < PIXEL_COUNT; i++) {
-        pixels[i].g = g;
-        pixels[i].r = r;
+        // 注意 WS2811 的颜色顺序是 GRB，而不是 RGB
+        pixels[i].g = r;
+        pixels[i].r = g;
         pixels[i].b = b;
     }
     
@@ -40,10 +42,16 @@ void strip_control_test_thread(void *args)
     LOG_INF("WS2811 LED cycle start: RED -> GREEN -> YELLOW");
 
     while (1) {
-        k_msleep(5000);
-        set_all_pixels(30, 0, 0);   k_sleep(K_SECONDS(2));   // 期望绿
-        set_all_pixels(0, 30, 0);   k_sleep(K_SECONDS(2));   // 期望红
-        set_all_pixels(0, 0, 30);   k_sleep(K_SECONDS(2));   // 期望蓝
-        set_all_pixels(30, 30, 0);  k_sleep(K_SECONDS(2));   // 期望黄
+        LOG_INF(">>> (255,0,0) 应该红");
+        set_all_pixels(255, 0, 0);
+        k_sleep(K_SECONDS(3));
+
+        LOG_INF(">>> (0,255,0) 应该绿");
+        set_all_pixels(0, 255, 0);
+        k_sleep(K_SECONDS(3));
+
+        LOG_INF(">>> (0,0,255) 应该蓝");
+        set_all_pixels(0, 0, 255);
+        k_sleep(K_SECONDS(6));
     }
 }
