@@ -105,11 +105,6 @@ void timer_action_expiry_cb(struct k_timer *timer)
     bool from_cmd = atomic_cas(&wt->pending_cmds, 1, 0);
     if(from_cmd){
         LOG_DBG("Action timer triggered by command");
-        if (wt->is_active) {
-            LOG_DBG("Action timer triggered already, ignoring");
-            return;
-        }
-        wt->is_active = true;
         uint8_t channel_offset = get_channel_offset_by_action_id(worker->action_id);
         LOG_INF("channel_offset: %u", channel_offset);
         if (channel_offset != 0xFF) {
@@ -139,7 +134,6 @@ void timer_action_expiry_cb(struct k_timer *timer)
         LOG_DBG("Action timer triggered by expiry");
         if (wt->is_active) {
             stop_work_timer(&worker->timer_action);
-            wt->is_active = false;
         }
     }
 }
@@ -153,17 +147,15 @@ void timer_bee_expiry_cb(struct k_timer *timer)
     bool from_cmd = atomic_cas(&wt->pending_cmds, 1, 0);
     if(from_cmd){
         LOG_DBG("Bee timer triggered by command");
-        wt->is_active = true;
         //TODO just for test
-        // led_control_blink_alt(0, 255, 0,   0, 0, 255,   250);
+        led_control_blink_alt(0, 255, 0,   0, 0, 255,   250);
         buzzer_on();
     }else{
         LOG_DBG("Bee timer triggered by expiry");
         buzzer_off();
         stop_work_timer(&worker->timer_bee);
         // TODO just for test
-        // led_control_static(0, 255, 0);
-        wt->is_active = false;
+        led_control_static(0, 255, 0);
     }
 }
 

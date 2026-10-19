@@ -16,7 +16,6 @@ void set_all_pixels(uint8_t r, uint8_t g, uint8_t b)
 {
     LOG_INF("set_all_pixels: r=%u g=%u b=%u", r, g, b);
     for (int i = 0; i < PIXEL_COUNT; i++) {
-        // 注意 WS2811 的颜色顺序是 GRB，而不是 RGB
         pixels[i].g = r;
         pixels[i].r = g;
         pixels[i].b = b;

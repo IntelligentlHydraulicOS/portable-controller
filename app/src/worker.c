@@ -34,7 +34,8 @@ worker_t *get_worker(void) {
         init_worker(worker);
         init_work_timer(&worker->timer_heartbeat, 1000, timer_heartbeat_expiry_cb);
         init_work_timer(&worker->timer_action, 200, timer_action_expiry_cb);
-        init_work_timer(&worker->timer_bee, 200, timer_bee_expiry_cb);
+        //TODO just for test, should be 200
+        init_work_timer(&worker->timer_bee, 2000, timer_bee_expiry_cb);
     }
 
     return worker;    
