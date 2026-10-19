@@ -452,7 +452,7 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3)
         if (err < 0 ) {
             if( msg.type == BLE_TX_NOTIFY || msg.type == BLE_TX_NUS) {
                 fail_send_counter++;
-                if (fail_send_counter >= 5) {
+                if (fail_send_counter >= 20) {
                     stop_work_timer(&worker->timer_heartbeat);
                     stop_work_timer(&worker->timer_action);
                     LOG_ERR("BLE TX NOYTIFY failed %d times, resetting connection", fail_send_counter);

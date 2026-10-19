@@ -44,6 +44,7 @@ static void apply_current(void)
         set_all_pixels(0, 0, 0);
         break;
     }
+    k_sleep(K_MSEC(1));  /* 确保 LED strip 有时间刷新 */
 }
 
 static inline bool is_blinking(led_mode_t m)
