@@ -44,7 +44,7 @@ static void apply_current(void)
         set_all_pixels(0, 0, 0);
         break;
     }
-    k_sleep(K_MSEC(1));  /* 确保 LED strip 有时间刷新 */
+    k_sleep(K_MSEC(1));
 }
 
 static inline bool is_blinking(led_mode_t m)
@@ -96,7 +96,7 @@ void led_thread_entry(void *p1, void *p2, void *p3)
 
 int led_control_init(void)
 {
-    if (init_led_strip() != 0) {
+    if (init_leds() != 0) {
         LOG_ERR("LED strip hardware init failed");
         return -ENODEV;
     }

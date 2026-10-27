@@ -2,7 +2,6 @@
 #include "worker.h"
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
-#include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
@@ -11,11 +10,8 @@
 LOG_MODULE_REGISTER(rs485, LOG_LEVEL_INF);
 
 #define UART485_NODE DT_NODELABEL(uart21)
-#define RS485_DE_GPIO_CTRL_NODE DT_NODELABEL(gpio1)
-#define RS485_DE_PIN            6
 
 static const struct device *uart485_dev = DEVICE_DT_GET(UART485_NODE);
-static const struct device *rs485_de_dev = DEVICE_DT_GET(RS485_DE_GPIO_CTRL_NODE);
 
 static uint8_t rx_buf[TX_MSG_MAX_DATA];
 static size_t rx_len = 0;
@@ -88,9 +84,8 @@ static void rs485_uart_cb(const struct device *dev, void *user_data)
 
         if (uart_irq_tx_complete(dev)) {
             uart_irq_tx_disable(dev);
-            gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 0); 
             tx_done = true;
-            LOG_DBG("TX complete, DE pulled low");
+            LOG_DBG("TX complete");
         }
     }
 }
@@ -110,7 +105,7 @@ void rs485_send(const uint8_t *data, size_t len)
     tx_idx = 0;
     tx_done = false;
 
-    gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 1);
+    /* 没有 DE 管脚，直接启动 UART 发送 */
     uart_irq_tx_enable(uart485_dev);
 
     uint32_t timeout = 0;
@@ -122,24 +117,11 @@ void rs485_send(const uint8_t *data, size_t len)
     if (!tx_done) {
         LOG_ERR("RS485 TX timeout!");
         uart_irq_tx_disable(uart485_dev);
-        gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 0);
     }
 }
 
 int rs485_init(void)
 {
-    if (!device_is_ready(rs485_de_dev)) {
-        LOG_ERR("RS485 DE GPIO controller not ready");
-        return -ENODEV;
-    }
-
-    int ret = gpio_pin_configure(rs485_de_dev, RS485_DE_PIN,
-                                 GPIO_OUTPUT_INACTIVE);
-    if (ret < 0) {
-        LOG_ERR("DE pin config failed: %d", ret);
-        return ret;
-    }
-
     if (!device_is_ready(uart485_dev)) {
         LOG_ERR("UART485 not ready");
         return -ENODEV;
@@ -155,7 +137,7 @@ int rs485_init(void)
     uart_irq_callback_user_data_set(uart485_dev, rs485_uart_cb, NULL);
     uart_irq_rx_enable(uart485_dev);
 
-    LOG_INF("RS485 init done (interrupt driven, DE controlled by TX complete)");
+    LOG_INF("RS485 init done (interrupt driven, no DE pin)");
     return 0;
 }
 
@@ -190,27 +172,13 @@ void rs485_tx_thread_entry(void *p1, void *p2, void *p3)
     }
 }
 
-/* 简单的 DE 引脚翻转测试函数，用于硬件验证 */
-void test(void)
-{
-    while (1) {
-        gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 1);
-        k_sleep(K_MSEC(1000));
-        gpio_pin_set(rs485_de_dev, RS485_DE_PIN, 0);
-        k_sleep(K_MSEC(1000));
-    }
-}
-
 void rs485_test_thread(void *arg)
 {
+    ARG_UNUSED(arg);
+
     struct tx_msg tx_msg;
     while (1) {
         memset(&tx_msg, 0, sizeof(tx_msg));
-        
-        // for (int i = 0; i < 255; i++) {
-        //     tx_msg.data[i] = i;
-        // }
-        // tx_msg.len = 255;
 
         uint8_t test_data[] = {0x55, 0xAA, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x12};
         memcpy(tx_msg.data, test_data, sizeof(test_data));
