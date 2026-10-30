@@ -268,7 +268,7 @@ int main(void) {
 
     LOG_INF("All threads created");
 
-    // battery_scan_timer(ble_enabled, zigbee_enabled);
+    battery_scan_timer(ble_enabled, zigbee_enabled);
     LOG_INF("All timers created");
 
     running_led(LED_ON);

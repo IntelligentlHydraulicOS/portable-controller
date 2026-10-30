@@ -7,11 +7,22 @@
 
 LOG_MODULE_REGISTER(battery_monitor, LOG_LEVEL_INF);
 
-/* 获取设备树配置的两个 ADC 通道 */
+#define ADC_ASYNC_TIMEOUT_MS  100
+#define BATTERY_DIV_NUMERATOR   15  
+#define BATTERY_DIV_DENOMINATOR 2 
+
 static const struct adc_dt_spec adc_voltage_ch = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 static const struct adc_dt_spec adc_current_ch = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 1);
 
 static battery_state_t battery_state = BAT_STATE_DISCHARGING;
+
+/* 异步 ADC 的 poll 信号 */
+static struct k_poll_signal adc_voltage_signal;
+static struct k_poll_signal adc_current_signal;
+
+
+static __aligned(4) int16_t adc_voltage_raw;
+static __aligned(4) int16_t adc_current_raw;
 
 /* ========== 电流换算参数 ==========
  * INA199A2 固定增益 100 V/V
@@ -59,21 +70,21 @@ static int voltage_to_soc(const int table[][2], size_t size, int voltage_mv)
     return table[size-1][1];
 }
 
-static int read_adc_mv(const struct adc_dt_spec *ch, int *voltage_mv)
+static int read_adc_mv_async(const struct adc_dt_spec *ch, 
+                             struct k_poll_signal *sig,
+                             int16_t *raw_buffer,
+                             int *voltage_mv)
 {
     if (!adc_is_ready_dt(ch)) {
         LOG_ERR("ADC channel not ready");
         return -ENODEV;
     }
 
-    int16_t raw_value;
-    struct adc_sequence_options options = {0}; // 初始化 options
     struct adc_sequence sequence = {
-        .buffer = &raw_value,
-        .buffer_size = sizeof(raw_value),
+        .buffer = raw_buffer,
+        .buffer_size = sizeof(int16_t),
         .channels = BIT(ch->channel_id),
         .resolution = ch->resolution,
-        .options = &options, // 显式赋值
     };
 
     int ret = adc_sequence_init_dt(ch, &sequence);
@@ -82,37 +93,57 @@ static int read_adc_mv(const struct adc_dt_spec *ch, int *voltage_mv)
         return ret;
     }
 
-    /* 处理 -EBUSY 和 -EAGAIN */
-    for (int i = 0; i < 5; i++) {
-        ret = adc_read_dt(ch, &sequence);
-        if (ret != -EAGAIN && ret != -EBUSY) {
-            break;
-        }
-        LOG_DBG("ADC busy (%d), retry %d/5", ret, i + 1);
-        k_msleep(5);
-    }
+    /* 重置 poll signal，准备接收新的完成事件 */
+    k_poll_signal_reset(sig);
 
+    /* 发起异步采样 */
+    ret = adc_read_async_dt(ch, &sequence, sig);
     if (ret < 0) {
-        LOG_ERR("ADC read failed: %d", ret);
+        LOG_ERR("adc_read_async_dt failed: %d", ret);
         return ret;
     }
 
-    int32_t val_mv = raw_value;
+    /* 等待转换完成（带超时） */
+    struct k_poll_event events[] = {
+        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
+                                 K_POLL_MODE_NOTIFY_ONLY,
+                                 sig),
+    };
+
+    ret = k_poll(events, 1, K_MSEC(ADC_ASYNC_TIMEOUT_MS));
+    if (ret != 0) {
+        LOG_ERR("ADC async poll timeout/error: %d", ret);
+        return (ret == -EAGAIN) ? -ETIMEDOUT : ret;
+    }
+
+    /* 检查 poll signal 的结果码 */
+    unsigned int signaled;
+    int result;
+    k_poll_signal_check(sig, &signaled, &result);
+    if (result != 0) {
+        LOG_ERR("ADC conversion error: %d", result);
+        return result;
+    }
+
+    /* 原始值转 mV */
+    int32_t val_mv = *raw_buffer;
     ret = adc_raw_to_millivolts_dt(ch, &val_mv);
     if (ret < 0) {
         LOG_ERR("adc_raw_to_millivolts_dt failed: %d", ret);
         return ret;
     }
     
-    LOG_DBG("ADC channel %d raw: %d, voltage: %d mV", ch->channel_id, raw_value, val_mv);
+    LOG_DBG("ADC ch%d raw: %d, voltage: %d mV", ch->channel_id, *raw_buffer, val_mv);
     *voltage_mv = val_mv;
     return 0;
 }
 
-
 int battery_monitor_init(void)
 {
     int rc;
+
+    k_poll_signal_init(&adc_voltage_signal);
+    k_poll_signal_init(&adc_current_signal);
 
     if (!adc_is_ready_dt(&adc_voltage_ch) || !adc_is_ready_dt(&adc_current_ch)) {
         LOG_ERR("ADC device not ready");
@@ -148,13 +179,24 @@ void battery_monitor_set_charge_state(battery_state_t state)
 
 int battery_monitor_get_voltage(int *voltage_mv)
 {
-    return read_adc_mv(&adc_voltage_ch, voltage_mv);
+    int pin_mv;
+    int ret = read_adc_mv_async(&adc_voltage_ch, &adc_voltage_signal, 
+                                &adc_voltage_raw, &pin_mv);
+    if (ret < 0) {
+        return ret;
+    }
+    int32_t battery_voltage = pin_mv * BATTERY_DIV_NUMERATOR / BATTERY_DIV_DENOMINATOR;
+    *voltage_mv = battery_voltage;
+    
+    LOG_DBG("Pin: %d mV -> Battery: %d mV", pin_mv, battery_voltage);
+    return 0;
 }
 
 int battery_monitor_get_current(int32_t *current_ma)
 {
     int voltage_mv;
-    int ret = read_adc_mv(&adc_current_ch, &voltage_mv);
+    int ret = read_adc_mv_async(&adc_current_ch, &adc_current_signal, 
+                                &adc_current_raw, &voltage_mv);
     if (ret < 0) {
         return ret;
     }
@@ -170,16 +212,21 @@ int battery_monitor_get_current(int32_t *current_ma)
     return 0;
 }
 
-
 int battery_monitor_calc_capacity(int voltage_mv, int *capacity_pct)
 {
+    int cell_voltage_mv = voltage_mv / 3; 
     const int (*table)[2] = battery_state == BAT_STATE_CHARGING ? cp_table : dp_table;
     size_t size = battery_state == BAT_STATE_CHARGING ? CP_TABLE_SIZE : DP_TABLE_SIZE;
 
-    *capacity_pct = voltage_to_soc(table, size, voltage_mv);
+    *capacity_pct = voltage_to_soc(table, size, cell_voltage_mv);
     return 0;
-}
 
+    // const int (*table)[2] = battery_state == BAT_STATE_CHARGING ? cp_table : dp_table;
+    // size_t size = battery_state == BAT_STATE_CHARGING ? CP_TABLE_SIZE : DP_TABLE_SIZE;
+
+    // *capacity_pct = voltage_to_soc(table, size, voltage_mv);
+    // return 0;
+}
 
 int battery_monitor_get_capacity(int *capacity_pct)
 {
@@ -199,7 +246,11 @@ int battery_monitor_get_level(int *level)
         return ret;
     }
 
-    *level = capacity / 20;
-    if (*level > 5) *level = 5;
+    *level = (capacity + 10) / 20;
+    if (*level > 5){
+     *level = 5;
+    }else if (*level < 0) {
+        *level = 0;
+    }   
     return 0;
 }

@@ -10,14 +10,21 @@
 LOG_MODULE_REGISTER(battery_scan, LOG_LEVEL_INF);
 
 static struct k_timer scan_battery_timer;
+static K_SEM_DEFINE(adc_work_sem, 0, 1);
+
+static struct k_work adc_sample_work;
 
 static bool s_use_ble    = false;
 static bool s_use_zigbee = false;
 
 static void battery_scan_timer_handler(struct k_timer *timer)
 {
-    ARG_UNUSED(timer);
+    k_work_submit(&adc_sample_work);
+}
 
+static void adc_sample_work_handler(struct k_work *work)
+{
+    
     int voltage = 0, capacity = 0, level = 0;
     int32_t current = 0;
 
@@ -59,7 +66,7 @@ static void battery_scan_timer_handler(struct k_timer *timer)
     memset(&msg, 0, sizeof(msg));
     msg.data[0] = (uint8_t)(level & 0xFF);
     msg.len = 1;
-
+    msg.type = BLE_TX_NOTIFY;
     if (k_msgq_put(tx_msgq, &msg, K_NO_WAIT) != 0) {
         LOG_WRN("Battery Info TX queue full");
     } else {
@@ -71,8 +78,9 @@ int battery_scan_timer(bool use_ble, bool use_zigbee)
 {
     s_use_ble    = use_ble;
     s_use_zigbee = use_zigbee;
-
+    k_work_init(&adc_sample_work, adc_sample_work_handler);
     k_timer_init(&scan_battery_timer, battery_scan_timer_handler, NULL);
-    k_timer_start(&scan_battery_timer, K_SECONDS(1), K_SECONDS(30));
+    k_timer_start(&scan_battery_timer, K_SECONDS(5), K_SECONDS(30));
+
     return 0;
 }
