@@ -20,8 +20,9 @@
 #include "proto_config.h"
 #include "led_strip.h"
 #include "led_control.h"
-#include "bee.h"
 #include "nfc_handlers.h"
+#include "gpio.h"
+
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -120,6 +121,13 @@ int main(void) {
     }else{
         LOG_INF("FS mounted, logs will persist");
     }
+    ret = init_gpio();
+    if (ret < 0) {
+        LOG_ERR("GPIO init failed: %d", ret);
+        return  -1;
+    }else{
+        LOG_INF("GPIO initialized");
+    }
 
     ret = rs485_init();
     if (ret < 0) {
@@ -134,19 +142,6 @@ int main(void) {
         LOG_ERR("Battery monitor init failed: %d", ret);
     }else{
         LOG_INF("Battery monitor initialized");
-    }
-    //TODO: set battery state based on GPIO or charger detection
-    battery_monitor_set_charge_state(BAT_STATE_DISCHARGING);
-
-    if (led_control_init() != 0) {
-        LOG_ERR("LED control init failed");
-    }else{
-        LOG_INF("LED control initialized");
-    }
-    if (buzzer_init() != 0) {
-        LOG_ERR("Buzzer init failed");
-    }else{
-        LOG_INF("Buzzer initialized");
     }
 
     // init Settings for NFC and BLE
@@ -273,6 +268,10 @@ int main(void) {
 
     running_led(LED_ON);
     link_led(LED_OFF);
+    enout_on();
+    enlock_on();
+    //TODO: set battery state based on GPIO or charger detection
+    battery_monitor_set_charge_state(BAT_STATE_DISCHARGING);
 
     while (1) 
     {

@@ -21,7 +21,6 @@ struct led_msg {
 
 void led_control_test_thread(void *args);
 void led_thread_entry(void *p1, void *p2, void *p3);
-int led_control_init(void);
 int led_control_send(const struct led_msg *msg);
 int led_control_off(void);
 int led_control_static(uint8_t r, uint8_t g, uint8_t b);

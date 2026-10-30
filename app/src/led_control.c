@@ -1,7 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include "led_control.h"
-#include "led_strip.h"
+#include "gpio.h"
 
 LOG_MODULE_REGISTER(led_ctl, LOG_LEVEL_INF);
 
@@ -92,16 +92,6 @@ void led_thread_entry(void *p1, void *p2, void *p3)
             apply_current();
         }
     }
-}
-
-int led_control_init(void)
-{
-    if (init_leds() != 0) {
-        LOG_ERR("LED strip hardware init failed");
-        return -ENODEV;
-    }
-    LOG_INF("LED control init done");
-    return 0;
 }
 
 int led_control_send(const struct led_msg *msg)

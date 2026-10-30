@@ -6,8 +6,7 @@
 #include "worker.h"
 #include "timer.h"
 #include "action.h"
-#include "led_strip.h"
-#include "bee.h"
+#include "gpio.h"
 #include "led_control.h"
 
 LOG_MODULE_REGISTER(timer, LOG_LEVEL_INF);

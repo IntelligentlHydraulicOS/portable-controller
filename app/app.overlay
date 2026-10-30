@@ -10,6 +10,8 @@
 
     zephyr,user {
         io-channels = <&adc 4>, <&adc 2>;
+        enout-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
+        enlock-gpios = <&gpio2 6 GPIO_ACTIVE_HIGH>;
         buzzer-gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
         r-led-en-gpios = <&gpio2 10 GPIO_ACTIVE_HIGH>; // 红灯使能
         b-led-en-gpios = <&gpio2 5 GPIO_ACTIVE_HIGH>;  // 蓝灯使能

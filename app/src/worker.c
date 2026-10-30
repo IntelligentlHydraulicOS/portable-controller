@@ -10,7 +10,7 @@
 #include "thread_pool.h"
 #include <zephyr/kernel.h>
 #include "led_control.h"
-#include "bee.h"
+#include "gpio.h"
 
 uint8_t choose_controller_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);
 uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8_t *reply, size_t *reply_len);

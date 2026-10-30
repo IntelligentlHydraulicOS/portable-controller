@@ -10,7 +10,7 @@
 #include <string.h>
 #include "message.h"
 #include "led_control.h"
-#include "led_strip.h"
+#include "gpio.h"
 
 LOG_MODULE_REGISTER(ble, LOG_LEVEL_INF);
 
