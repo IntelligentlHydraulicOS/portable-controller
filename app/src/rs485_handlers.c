@@ -9,7 +9,7 @@
 
 LOG_MODULE_REGISTER(rs485, LOG_LEVEL_INF);
 
-#define UART485_NODE DT_NODELABEL(uart21)
+#define UART485_NODE DT_NODELABEL(uart20)
 
 static const struct device *uart485_dev = DEVICE_DT_GET(UART485_NODE);
 
