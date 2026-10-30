@@ -5,10 +5,6 @@
 
 LOG_MODULE_REGISTER(led_cycle, LOG_LEVEL_INF);
 
-        // g-led-en-gpios = <&gpio2 0 GPIO_ACTIVE_HIGH>;  // 绿灯使能
-        // linkled-led-en-gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;  // link LED
-        // running-led-en-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;  // running LED
-
 static const struct gpio_dt_spec r_en   = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), r_led_en_gpios);
 static const struct gpio_dt_spec g_en   = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), g_led_en_gpios);
 static const struct gpio_dt_spec b_en   = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), b_led_en_gpios);
@@ -17,10 +13,19 @@ static const struct gpio_dt_spec runningled_en = GPIO_DT_SPEC_GET(DT_PATH(zephyr
 
 void set_all_pixels(uint8_t r, uint8_t g, uint8_t b)
 {
-    LOG_INF("set_all_pixels: r=%u g=%u b=%u", r, g, b);
     gpio_pin_set_dt(&r_en, r > 0 ? 1 : 0);
     gpio_pin_set_dt(&g_en, g > 0 ? 1 : 0);
     gpio_pin_set_dt(&b_en, b > 0 ? 1 : 0);
+}
+
+void link_led(int on)
+{
+    gpio_pin_set_dt(&linkled_en, on ? 1 : 0);
+}
+
+void running_led(int on)
+{
+    gpio_pin_set_dt(&runningled_en, on ? 1 : 0);
 }
 
 int init_leds(void)

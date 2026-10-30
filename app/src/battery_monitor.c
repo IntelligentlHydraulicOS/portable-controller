@@ -7,6 +7,7 @@
 
 LOG_MODULE_REGISTER(battery_monitor, LOG_LEVEL_INF);
 
+/* 获取设备树配置的两个 ADC 通道 */
 static const struct adc_dt_spec adc_voltage_ch = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 static const struct adc_dt_spec adc_current_ch = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 1);
 
@@ -18,8 +19,8 @@ static battery_state_t battery_state = BAT_STATE_DISCHARGING;
  * I(mA) = (Vout_mV - VREF_mV) * 1000 / (R_shunt_mΩ * Gain)
  */
 #define INA199_GAIN          100
-#define R_SHUNT_MILLIOHM     10      /* 10mΩ = 0.01Ω */
-#define VREF_MV              0       /* 单向检测接GND为0 */
+#define R_SHUNT_MILLIOHM     100     /* 0.1Ω = 100mΩ，对应图中的 R40 */
+#define VREF_MV              0       /* 单向检测，REF 接地为 0 */
 
 /* ========== 电压-SOC 查找表（升序，单位 mV） ========== */
 static const int dp_table[][2] = {
@@ -66,9 +67,13 @@ static int read_adc_mv(const struct adc_dt_spec *ch, int *voltage_mv)
     }
 
     int16_t raw_value;
+    struct adc_sequence_options options = {0}; // 初始化 options
     struct adc_sequence sequence = {
         .buffer = &raw_value,
         .buffer_size = sizeof(raw_value),
+        .channels = BIT(ch->channel_id),
+        .resolution = ch->resolution,
+        .options = &options, // 显式赋值
     };
 
     int ret = adc_sequence_init_dt(ch, &sequence);
@@ -77,7 +82,16 @@ static int read_adc_mv(const struct adc_dt_spec *ch, int *voltage_mv)
         return ret;
     }
 
-    ret = adc_read_dt(ch, &sequence);
+    /* 处理 -EBUSY 和 -EAGAIN */
+    for (int i = 0; i < 5; i++) {
+        ret = adc_read_dt(ch, &sequence);
+        if (ret != -EAGAIN && ret != -EBUSY) {
+            break;
+        }
+        LOG_DBG("ADC busy (%d), retry %d/5", ret, i + 1);
+        k_msleep(5);
+    }
+
     if (ret < 0) {
         LOG_ERR("ADC read failed: %d", ret);
         return ret;
@@ -89,10 +103,12 @@ static int read_adc_mv(const struct adc_dt_spec *ch, int *voltage_mv)
         LOG_ERR("adc_raw_to_millivolts_dt failed: %d", ret);
         return ret;
     }
-
+    
+    LOG_DBG("ADC channel %d raw: %d, voltage: %d mV", ch->channel_id, raw_value, val_mv);
     *voltage_mv = val_mv;
     return 0;
 }
+
 
 int battery_monitor_init(void)
 {
@@ -154,6 +170,17 @@ int battery_monitor_get_current(int32_t *current_ma)
     return 0;
 }
 
+
+int battery_monitor_calc_capacity(int voltage_mv, int *capacity_pct)
+{
+    const int (*table)[2] = battery_state == BAT_STATE_CHARGING ? cp_table : dp_table;
+    size_t size = battery_state == BAT_STATE_CHARGING ? CP_TABLE_SIZE : DP_TABLE_SIZE;
+
+    *capacity_pct = voltage_to_soc(table, size, voltage_mv);
+    return 0;
+}
+
+
 int battery_monitor_get_capacity(int *capacity_pct)
 {
     int voltage_mv;
@@ -161,12 +188,7 @@ int battery_monitor_get_capacity(int *capacity_pct)
     if (ret < 0) {
         return ret;
     }
-
-    const int (*table)[2] = battery_state == BAT_STATE_CHARGING ? cp_table : dp_table;
-    size_t size = battery_state == BAT_STATE_CHARGING ? CP_TABLE_SIZE : DP_TABLE_SIZE;
-
-    *capacity_pct = voltage_to_soc(table, size, voltage_mv);
-    return 0;
+    return battery_monitor_calc_capacity(voltage_mv, capacity_pct);
 }
 
 int battery_monitor_get_level(int *level)

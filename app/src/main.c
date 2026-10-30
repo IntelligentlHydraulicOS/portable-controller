@@ -117,26 +117,36 @@ int main(void) {
     ret = mount_log_fs();
     if (ret != 0) {
         LOG_ERR("FS unavailable, logs will NOT persist");
+    }else{
+        LOG_INF("FS mounted, logs will persist");
     }
 
     ret = rs485_init();
     if (ret < 0) {
         LOG_ERR("RS485 init failed: %d", ret);
         return  -1;
+    }else{
+        LOG_INF("RS485 initialized");
     }
 
     ret = battery_monitor_init();
     if (ret < 0) {
         LOG_ERR("Battery monitor init failed: %d", ret);
+    }else{
+        LOG_INF("Battery monitor initialized");
     }
     //TODO: set battery state based on GPIO or charger detection
     battery_monitor_set_charge_state(BAT_STATE_DISCHARGING);
 
     if (led_control_init() != 0) {
         LOG_ERR("LED control init failed");
+    }else{
+        LOG_INF("LED control initialized");
     }
     if (buzzer_init() != 0) {
         LOG_ERR("Buzzer init failed");
+    }else{
+        LOG_INF("Buzzer initialized");
     }
 
     // init Settings for NFC and BLE
@@ -253,13 +263,16 @@ int main(void) {
 
     // thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
     // thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
-    thread_pool_submit(led_test_thread,  NULL, K_NO_WAIT);
+    // thread_pool_submit(led_test_thread,  NULL, K_NO_WAIT);
     // thread_pool_submit(led_control_test_thread,  NULL, K_NO_WAIT);
 
     LOG_INF("All threads created");
 
     // battery_scan_timer(ble_enabled, zigbee_enabled);
     LOG_INF("All timers created");
+
+    running_led(LED_ON);
+    link_led(LED_OFF);
 
     while (1) 
     {

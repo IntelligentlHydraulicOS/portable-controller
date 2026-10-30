@@ -104,18 +104,18 @@ uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
     if (worker == NULL || data == NULL || len < 9 || reply == NULL || reply_len == NULL) {
         return 0;
     }
-    uint8_t controller_id = data[len -2];
-    if (worker->controller_id != controller_id) {
-        snprintf((char *)reply, TX_MSG_MAX_DATA, "Controller ID %u mismatch", controller_id);
-        *reply_len = strlen((char *)reply);
-        return 0;
-    }
+    // uint8_t controller_id = data[len -2];
+    // if (worker->controller_id != controller_id) {
+    //     snprintf((char *)reply, TX_MSG_MAX_DATA, "Controller ID %u mismatch", controller_id);
+    //     *reply_len = strlen((char *)reply);
+    //     return 0;
+    // }
 
-    if(is_worker_connected(worker) == false){
-        snprintf((char *)reply, TX_MSG_MAX_DATA, "Worker not connected to controller");
-        *reply_len = strlen((char *)reply);
-        return 0;
-    }
+    // if(is_worker_connected(worker) == false){
+    //     snprintf((char *)reply, TX_MSG_MAX_DATA, "Worker not connected to controller");
+    //     *reply_len = strlen((char *)reply);
+    //     return 0;
+    // }
     uint8_t action_id = data[3];
     worker->action_id = action_id;
     worker->is_ready = true;

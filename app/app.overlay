@@ -18,13 +18,21 @@
 };
 
 &pinctrl {
-    /* 新增：UART20 (P2.08 TX, P2.07 RX) */
-    uart20_default: uart20_default {
-        group1 {
-            psels = <NRF_PSEL(UART_TX, 2, 8)>,
-                    <NRF_PSEL(UART_RX, 2, 7)>;
-        };
-    };
+    /* UART20 (P2.08 TX, P2.07 RX) */
+    // uart20_default: uart20_default {
+    //     group1 {
+    //         psels = <NRF_PSEL(UART_TX, 2, 8)>,
+    //                 <NRF_PSEL(UART_RX, 2, 7)>;
+    //     };
+    //     /delete-node/ group2;
+    // };
+    // uart20_sleep: uart20_sleep {
+    //     group1 {
+    //         psels = <NRF_PSEL(UART_TX, 2, 8)>,
+    //                 <NRF_PSEL(UART_RX, 2, 7)>;
+    //         low-power-enable;
+    //     };
+    // };
 
     /* UART21 (P1.04 TX, P1.05 RX) */
     uart21_default: uart21_default {
@@ -44,11 +52,11 @@
 };
 
 &uart20 {
-    status = "okay";
-    current-speed = <115200>;
-    pinctrl-0 = <&uart20_default>;
-    pinctrl-1 = <&uart20_sleep>;
-    pinctrl-names = "default", "sleep";
+    status = "disabled";
+    // current-speed = <115200>;
+    // pinctrl-0 = <&uart20_default>;
+    // pinctrl-1 = <&uart20_sleep>;
+    // pinctrl-names = "default", "sleep";
 };
 
 &uart21 {
@@ -84,7 +92,7 @@
     };
     channel@2 {
         reg = <2>;
-        zephyr,gain = "ADC_GAIN_1_6";
+        zephyr,gain = "ADC_GAIN_1_4";
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,input-positive = <NRF_SAADC_AIN2>;
@@ -105,13 +113,17 @@
 
 &cpuapp_rram {
     partitions {
-        slot0_partition: partition@F800 {
+        ranges;
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        slot0_partition: partition@10000 {
             compatible = "zephyr,mapped-partition";
             label = "image-0";
             reg = <0x10000 0x63C00>;
         };
 
-        slot1_partition: partition@73800 {
+        slot1_partition: partition@73C00 {
             compatible = "zephyr,mapped-partition";
             label = "image-1";
             reg = <0x73C00 0x63C00>;

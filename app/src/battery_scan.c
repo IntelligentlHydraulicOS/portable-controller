@@ -19,17 +19,30 @@ static void battery_scan_timer_handler(struct k_timer *timer)
     ARG_UNUSED(timer);
 
     int voltage = 0, capacity = 0, level = 0;
+    int32_t current = 0;
 
     int rc = battery_monitor_get_voltage(&voltage);
-    if (rc == 0) {
-        rc = battery_monitor_get_capacity(&capacity);
-    }
     if (rc != 0) {
-        LOG_WRN("Battery read failed: %d", rc);
+        LOG_WRN("Battery voltage read failed: %d", rc);
         return;
     }
-    battery_monitor_get_level(&level);
+
+    battery_monitor_calc_capacity(voltage, &capacity);
+    
+    level = capacity / 20;
+    if (level > 5) level = 5;
+
     LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
+
+    /* 4. 延时 5ms，给 SAADC 硬件复位时间 (关键：避免跨通道 EAGAIN) */
+    k_msleep(5);
+
+    rc = battery_monitor_get_current(&current);
+    if (rc == 0) {
+        LOG_INF("Current: %d mA", current);
+    } else {
+        LOG_WRN("Current read failed: %d", rc);
+    }
 
     struct k_msgq *tx_msgq = NULL;
     if (s_use_ble) {
