@@ -27,6 +27,7 @@ static void adc_sample_work_handler(struct k_work *work)
     
     int voltage = 0, capacity = 0, level = 0;
     int32_t current = 0;
+    int32_t adout_voltage = 0;
 
     int rc = battery_monitor_get_voltage(&voltage);
     if (rc != 0) {
@@ -41,7 +42,6 @@ static void adc_sample_work_handler(struct k_work *work)
 
     LOG_INF("Battery: %d mV, %d%%, %d/5 bars", voltage, capacity, level);
 
-    /* 4. 延时 5ms，给 SAADC 硬件复位时间 (关键：避免跨通道 EAGAIN) */
     k_msleep(5);
 
     rc = battery_monitor_get_current(&current);
@@ -49,6 +49,14 @@ static void adc_sample_work_handler(struct k_work *work)
         LOG_INF("Current: %d mA", current);
     } else {
         LOG_WRN("Current read failed: %d", rc);
+    }
+
+    //TODO if (current < 0) do something to indicate discharging, else charging;
+    rc = battery_monitor_get_adout_voltage(&adout_voltage);
+    if (rc == 0) {
+        LOG_INF("ADOUT Voltage: %d V", adout_voltage);
+    } else {
+        LOG_WRN("ADOUT Voltage read failed: %d", rc);
     }
 
     struct k_msgq *tx_msgq = NULL;

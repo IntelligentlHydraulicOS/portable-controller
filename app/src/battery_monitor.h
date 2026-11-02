@@ -15,6 +15,7 @@ int battery_monitor_get_voltage(int *voltage_mv);
 int battery_monitor_get_capacity(int *capacity_pct);
 int battery_monitor_get_level(int *level);
 int battery_monitor_get_current(int32_t *current_ma);
+int battery_monitor_get_adout_voltage(int *voltage_mv);
 int battery_monitor_calc_capacity(int voltage_mv, int *capacity_pct);
 int battery_monitor_get_capacity(int *capacity_pct);
 int battery_monitor_get_level(int *level);

@@ -13,16 +13,19 @@ LOG_MODULE_REGISTER(battery_monitor, LOG_LEVEL_INF);
 
 static const struct adc_dt_spec adc_voltage_ch = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 static const struct adc_dt_spec adc_current_ch = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 1);
+static const struct adc_dt_spec ad_out_ch = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 2);
 
 static battery_state_t battery_state = BAT_STATE_DISCHARGING;
 
 /* 异步 ADC 的 poll 信号 */
 static struct k_poll_signal adc_voltage_signal;
 static struct k_poll_signal adc_current_signal;
+static struct k_poll_signal ad_out_signal;
 
 
 static __aligned(4) int16_t adc_voltage_raw;
 static __aligned(4) int16_t adc_current_raw;
+static __aligned(4) int16_t ad_out_raw;
 
 /* ========== 电流换算参数 ==========
  * INA199A2 固定增益 100 V/V
@@ -144,8 +147,9 @@ int battery_monitor_init(void)
 
     k_poll_signal_init(&adc_voltage_signal);
     k_poll_signal_init(&adc_current_signal);
+    k_poll_signal_init(&ad_out_signal);
 
-    if (!adc_is_ready_dt(&adc_voltage_ch) || !adc_is_ready_dt(&adc_current_ch)) {
+    if (!adc_is_ready_dt(&adc_voltage_ch) || !adc_is_ready_dt(&adc_current_ch) || !adc_is_ready_dt(&ad_out_ch)) {
         LOG_ERR("ADC device not ready");
         return -ENODEV;
     }
@@ -162,7 +166,12 @@ int battery_monitor_init(void)
         return rc;
     }
 
-    LOG_INF("Voltage monitor (P1.11/AIN4) and current monitor (P1.06/AIN2) initialized");
+    rc = adc_channel_setup_dt(&ad_out_ch);
+    if (rc != 0) {
+        LOG_ERR("Output ADC channel setup failed: %d", rc);
+        return rc;
+    }
+    LOG_INF("Voltage monitor adc channel initialized");
     return 0;
 }
 
@@ -189,6 +198,21 @@ int battery_monitor_get_voltage(int *voltage_mv)
     *voltage_mv = battery_voltage;
     
     LOG_DBG("Pin: %d mV -> Battery: %d mV", pin_mv, battery_voltage);
+    return 0;
+}
+
+int battery_monitor_get_adout_voltage(int *voltage_mv)
+{
+    int pin_mv;
+    int ret = read_adc_mv_async(&ad_out_ch, &ad_out_signal, 
+                                &ad_out_raw, &pin_mv);
+    if (ret < 0) {
+        return ret;
+    }
+    int32_t battery_voltage = (pin_mv + 500) / 1000;
+    *voltage_mv = battery_voltage;
+    LOG_INF("Pin: %d mV -> Battery: %d mV", pin_mv, battery_voltage);
+
     return 0;
 }
 
