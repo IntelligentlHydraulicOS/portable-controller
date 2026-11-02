@@ -144,12 +144,6 @@ int main(void) {
         LOG_INF("Battery monitor initialized");
     }
 
-    ret = dog_init();
-    if (ret < 0) {
-        LOG_ERR("Watchdog init failed: %d", ret);
-    }else{
-        LOG_INF("Watchdog initialized");
-    }
     // init Settings for NFC and BLE
     ret = settings_subsys_init();
     if (ret) {
@@ -264,6 +258,7 @@ int main(void) {
         return -1;
     }
 
+    thread_pool_submit(feeddog_thread, NULL, K_NO_WAIT);
     // thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
     // thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
     // thread_pool_submit(led_test_thread,  NULL, K_NO_WAIT);
@@ -283,11 +278,7 @@ int main(void) {
 
     while (1) 
     {
-        k_sleep(K_SECONDS(2));
-        ret = wdt_feed(get_dog(), get_dog_channel());
-        if (ret < 0) {
-            LOG_ERR("wdt_feed failed: %d", ret);
-        }
+        k_sleep(K_SECONDS(5));
     }
 
     //unreachable code, but if we ever exit the main thread, clean up the worker

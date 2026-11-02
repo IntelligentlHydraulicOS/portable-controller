@@ -51,12 +51,20 @@ int dog_init(void)
     return 0;
 }
 
-const struct device *get_dog()
+void feeddog_thread(void *arg)
 {
-    return wdt_dev;
-}
-
-int get_dog_channel()
-{
-    return wdt_channel_id;
+    int ret = dog_init();
+    if (ret < 0) {
+        LOG_ERR("Watchdog init failed: %d", ret);
+    }else{
+        LOG_INF("Watchdog initialized");
+    }
+    while (1) 
+    {
+        k_sleep(K_SECONDS(2));
+        ret = wdt_feed(wdt_dev, wdt_channel_id);
+        if (ret < 0) {
+            LOG_ERR("wdt_feed failed: %d", ret);
+        }
+    }
 }
