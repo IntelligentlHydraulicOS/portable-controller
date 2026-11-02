@@ -201,6 +201,7 @@ int main(void) {
 
     worker_t *worker = get_worker();
     if (ble_enabled) {
+        disable_zigbee();
         k_thread_create(&bt_rx_thread_data, bt_rx_stack,
                         K_THREAD_STACK_SIZEOF(bt_rx_stack),
                         ble_rx_thread_entry, worker, NULL, NULL,
@@ -213,6 +214,7 @@ int main(void) {
                         BT_TX_PRIORITY, 0, K_NO_WAIT);
         k_thread_name_set(&bt_tx_thread_data, "BT_TX");
     }else{
+        enable_zigbee();
         if( zigbee_enabled){
                          k_thread_create(&zigbee_rx_thread_data, zigbee_rx_stack,
                             K_THREAD_STACK_SIZEOF(zigbee_rx_stack),
@@ -281,7 +283,7 @@ int main(void) {
 
     while (1) 
     {
-        k_sleep(K_SECONDS(1));
+        k_sleep(K_SECONDS(2));
         ret = wdt_feed(get_dog(), get_dog_channel());
         if (ret < 0) {
             LOG_ERR("wdt_feed failed: %d", ret);

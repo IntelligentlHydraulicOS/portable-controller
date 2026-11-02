@@ -13,6 +13,7 @@ static const struct gpio_dt_spec runningled_en = GPIO_DT_SPEC_GET(DT_PATH(zephyr
 static const struct gpio_dt_spec buzzer = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), buzzer_gpios);
 static const struct gpio_dt_spec enout = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), enout_gpios);
 static const struct gpio_dt_spec enlock = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), enlock_gpios);
+static const struct gpio_dt_spec adout = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), adout_gpios);
 
 int init_gpio(void)
 {
@@ -99,6 +100,16 @@ int init_gpio(void)
     }
     LOG_INF("Enlock GPIO configured");
 
+    if (!gpio_is_ready_dt(&adout)) {
+        LOG_ERR("ADOUT GPIO not ready");
+        return -ENODEV;
+    }
+    ret = gpio_pin_configure_dt(&adout, GPIO_INPUT| GPIO_PULL_DOWN);
+    if (ret < 0) {
+        LOG_ERR("ADOUT config as INPUT failed: %d", ret);
+        return ret;
+    }
+
     return 0;
 }
 
@@ -147,4 +158,13 @@ void enlock_on(void)
 void enlock_off(void)
 {
     gpio_pin_set_dt(&enlock, 0);
+}
+
+int read_gpio_adout(void)
+{
+    if (!gpio_is_ready_dt(&adout)) {
+        LOG_ERR("ADOUT GPIO not ready");
+        return -ENODEV;
+    }
+    return gpio_pin_get_dt(&adout);
 }

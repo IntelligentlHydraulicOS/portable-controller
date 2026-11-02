@@ -6,6 +6,7 @@
 #include "ble_handlers.h"
 #include "zigbee_handlers.h"
 #include "battery_monitor.h"
+#include "gpio.h"
 
 LOG_MODULE_REGISTER(battery_scan, LOG_LEVEL_INF);
 
@@ -52,11 +53,11 @@ static void adc_sample_work_handler(struct k_work *work)
     }
 
     //TODO if (current < 0) do something to indicate discharging, else charging;
-    rc = battery_monitor_get_adout_voltage(&adout_voltage);
-    if (rc == 0) {
+    adout_voltage = read_gpio_adout();
+    if (adout_voltage >= 0) {
         LOG_INF("ADOUT Voltage: %d V", adout_voltage);
     } else {
-        LOG_WRN("ADOUT Voltage read failed: %d", rc);
+        LOG_WRN("ADOUT Voltage read failed: %d", adout_voltage);
     }
 
     struct k_msgq *tx_msgq = NULL;

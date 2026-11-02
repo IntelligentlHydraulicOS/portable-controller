@@ -105,12 +105,10 @@ void rs485_send(const uint8_t *data, size_t len)
     tx_idx = 0;
     tx_done = false;
 
-    /* 没有 DE 管脚，直接启动 UART 发送 */
     uart_irq_tx_enable(uart485_dev);
 
     uint32_t timeout = 0;
     while (!tx_done && timeout < 1000) {
-        k_sleep(K_MSEC(1));
         timeout++;
     }
 

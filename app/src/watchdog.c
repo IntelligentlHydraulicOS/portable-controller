@@ -6,8 +6,7 @@
 
 LOG_MODULE_REGISTER(wdt_sample, LOG_LEVEL_INF);
 
-#define WDT_TIMEOUT_MS   3000  // 看门狗超时时间 3 秒
-#define FEED_INTERVAL_MS 1000  // 喂狗间隔 1 秒
+#define WDT_TIMEOUT_MS   5000  // 看门狗超时时间 4 秒
 
 static const struct device *wdt_dev;
 static int wdt_channel_id;

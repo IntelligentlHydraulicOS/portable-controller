@@ -12,7 +12,13 @@
         watchdog0 = &wdt31;
     };
     zephyr,user {
-        io-channels = <&adc 4>, <&adc 2>, <&adc 7>;
+        io-channels = <&adc 4>, <&adc 2>;
+        zigbee-link-gpios = <&gpio2 9  GPIO_ACTIVE_HIGH>;
+        zigbee-en-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+        zigbee-mode-gpios = <&gpio2 3 GPIO_ACTIVE_HIGH>;
+
+        adout-gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+
         enout-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
         enlock-gpios = <&gpio2 6 GPIO_ACTIVE_HIGH>;
         buzzer-gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
@@ -98,14 +104,6 @@
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40)>;
         zephyr,input-positive = <NRF_SAADC_AIN2>;
-        zephyr,resolution = <12>;
-    };
-    channel@7 {
-        reg = <7>;
-        zephyr,gain = "ADC_GAIN_1_4";
-        zephyr,reference = "ADC_REF_INTERNAL";
-        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40)>;
-        zephyr,input-positive = <NRF_SAADC_AIN7>;
         zephyr,resolution = <12>;
     };
 };

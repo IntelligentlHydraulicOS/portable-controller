@@ -19,5 +19,6 @@ void set_all_pixels(uint8_t r, uint8_t g, uint8_t b);
 void link_led(int on);
 void running_led(int on);
 int init_gpio(void);
+int read_gpio_adout(void);
 
 #endif
