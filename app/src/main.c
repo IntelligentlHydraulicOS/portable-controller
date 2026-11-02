@@ -22,7 +22,7 @@
 #include "led_control.h"
 #include "nfc_handlers.h"
 #include "gpio.h"
-
+#include "watchdog.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -144,6 +144,12 @@ int main(void) {
         LOG_INF("Battery monitor initialized");
     }
 
+    ret = dog_init();
+    if (ret < 0) {
+        LOG_ERR("Watchdog init failed: %d", ret);
+    }else{
+        LOG_INF("Watchdog initialized");
+    }
     // init Settings for NFC and BLE
     ret = settings_subsys_init();
     if (ret) {
@@ -275,7 +281,11 @@ int main(void) {
 
     while (1) 
     {
-        k_sleep(K_SECONDS(10));
+        k_sleep(K_SECONDS(1));
+        ret = wdt_feed(get_dog(), get_dog_channel());
+        if (ret < 0) {
+            LOG_ERR("wdt_feed failed: %d", ret);
+        }
     }
 
     //unreachable code, but if we ever exit the main thread, clean up the worker

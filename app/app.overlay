@@ -8,6 +8,9 @@
         zephyr,shell-uart = &uart21;
     };
 
+    aliases {
+        watchdog0 = &wdt31;
+    };
     zephyr,user {
         io-channels = <&adc 4>, <&adc 2>, <&adc 7>;
         enout-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
@@ -21,6 +24,9 @@
     };
 };
 
+&wdt31 {
+    status = "okay";
+};
 &pinctrl {
     uart20_default: uart20_default {
         group1 {
