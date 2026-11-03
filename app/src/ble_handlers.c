@@ -11,6 +11,8 @@
 #include "message.h"
 #include "led_control.h"
 #include "gpio.h"
+#include "bee.h"
+
 
 LOG_MODULE_REGISTER(ble, LOG_LEVEL_INF);
 
@@ -142,13 +144,16 @@ static void update_led_from_state(void)
     switch (ble_state) {
     case BLE_ST_DISCONNECTED:
         link_led(LED_OFF);
+        buzzer_off();
         led_control_static(30, 0, 0);     /* 红 */
         break;
     case BLE_ST_CONNECTED:
         link_led(LED_ON);
+        buzzer_on();
         led_control_blink(0, 255, 0, 200); /* 绿闪 */
         break;
     case BLE_ST_NUS_READY:
+        buzzer_off();
         led_control_static(0, 255, 0);     /* 绿常亮 */
         break;
     }

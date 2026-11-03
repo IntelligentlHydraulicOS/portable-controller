@@ -14,6 +14,20 @@ static const struct gpio_dt_spec buzzer = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user),
 static const struct gpio_dt_spec enout = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), enout_gpios);
 static const struct gpio_dt_spec enlock = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), enlock_gpios);
 static const struct gpio_dt_spec adout = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), adout_gpios);
+static const struct gpio_dt_spec en_zigbee   = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), zigbee_en_gpios);
+static const struct gpio_dt_spec link_zigbee = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), zigbee_link_gpios);
+static const struct gpio_dt_spec mode_zigbee = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), zigbee_mode_gpios);
+
+
+struct zigbee_gpio_init_item {
+    const struct gpio_dt_spec *spec;
+    const char *name;
+};
+
+static const struct zigbee_gpio_init_item zigbee_gpio_items[] = {
+    { &en_zigbee,   "EN_ZIG"   },
+    { &mode_zigbee, "MODE_ZIG" },
+};
 
 int init_gpio(void)
 {
@@ -110,6 +124,34 @@ int init_gpio(void)
         return ret;
     }
 
+
+    if (!gpio_is_ready_dt(&link_zigbee)) {
+        LOG_ERR("LINK_ZIG GPIO not ready");
+        return -ENODEV;
+    }
+    ret = gpio_pin_configure_dt(&link_zigbee, GPIO_INPUT| GPIO_PULL_DOWN);
+    if (ret < 0) {
+        LOG_ERR("LINK_ZIG config as INPUT failed: %d", ret);
+        return ret;
+    }
+
+    for (size_t i = 0; i < ARRAY_SIZE(zigbee_gpio_items); i++) {
+        const struct gpio_dt_spec *spec = zigbee_gpio_items[i].spec;
+        const char *name = zigbee_gpio_items[i].name;
+
+        if (!gpio_is_ready_dt(spec)) {
+            LOG_ERR("GPIO not ready for %s", name);
+            return -ENODEV;
+        }
+
+        ret = gpio_pin_configure_dt(spec, GPIO_OUTPUT_INACTIVE);
+        if (ret < 0) {
+            LOG_ERR("%s config failed: %d", name, ret);
+            return ret;
+        }
+    }
+    LOG_INF("Zigbee GPIOs configured");
+
     return 0;
 }
 
@@ -167,4 +209,24 @@ int read_gpio_adout(void)
         return -ENODEV;
     }
     return gpio_pin_get_dt(&adout);
+}
+
+int read_zigbee_link_status()
+{
+    int link_state = gpio_pin_get_dt(&link_zigbee);
+    if (link_state < 0) {
+        LOG_ERR("Failed to read LINK_ZIG GPIO: %d", link_state);
+        return -1;
+    }
+    return link_state;
+}
+
+void enable_zigbee(void)
+{
+    gpio_pin_set_dt(&en_zigbee, 1);
+}
+
+void disable_zigbee(void)
+{
+    gpio_pin_set_dt(&en_zigbee, 0);
 }

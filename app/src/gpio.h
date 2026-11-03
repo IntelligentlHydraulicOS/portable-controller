@@ -20,5 +20,8 @@ void link_led(int on);
 void running_led(int on);
 int init_gpio(void);
 int read_gpio_adout(void);
+void enable_zigbee(void);
+void disable_zigbee(void);
+int read_zigbee_link_status(void);
 
 #endif

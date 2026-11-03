@@ -12,32 +12,8 @@ LOG_MODULE_REGISTER(zigbee, LOG_LEVEL_INF);
 #define UART_ZIGBEE_NODE DT_NODELABEL(uart22)
 static const struct device *uart_zigbee_dev = DEVICE_DT_GET(UART_ZIGBEE_NODE);
 
-static const struct gpio_dt_spec en_zigbee   = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), zigbee_en_gpios);
-static const struct gpio_dt_spec link_zigbee = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), zigbee_link_gpios);
-static const struct gpio_dt_spec mode_zigbee = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), zigbee_mode_gpios);
-
 K_MSGQ_DEFINE(zigbee_rx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
 K_MSGQ_DEFINE(zigbee_tx_msgq, sizeof(struct tx_msg), TX_MSG_QUEUE_SIZE, 4);
-
-void enable_zigbee(void)
-{
-    gpio_pin_set_dt(&en_zigbee, 1);
-}
-
-void disable_zigbee(void)
-{
-    gpio_pin_set_dt(&en_zigbee, 0);
-}
-
-int read_zigbee_link_status()
-{
-    int link_state = gpio_pin_get_dt(&link_zigbee);
-    if (link_state < 0) {
-        LOG_ERR("Failed to read LINK_ZIG GPIO: %d", link_state);
-        return -1;
-    }
-    return link_state;
-}
 
 struct k_msgq *get_zigbee_tx_msgq(void)
 {
@@ -90,45 +66,8 @@ static void zigbee_send(const uint8_t *data, size_t len)
     LOG_INF("Zigbee sent %u bytes", len);
 }
 
-struct zigbee_gpio_init_item {
-    const struct gpio_dt_spec *spec;
-    const char *name;
-};
-
-static const struct zigbee_gpio_init_item zigbee_gpio_items[] = {
-    { &en_zigbee,   "EN_ZIG"   },
-    { &mode_zigbee, "MODE_ZIG" },
-};
-
 int zigbee_init(void)
 {
-    int ret;
-    if (!gpio_is_ready_dt(&link_zigbee)) {
-        LOG_ERR("LINK_ZIG GPIO not ready");
-        return -ENODEV;
-    }
-    ret = gpio_pin_configure_dt(&link_zigbee, GPIO_INPUT| GPIO_PULL_DOWN);
-    if (ret < 0) {
-        LOG_ERR("LINK_ZIG config as INPUT failed: %d", ret);
-        return ret;
-    }
-
-    for (size_t i = 0; i < ARRAY_SIZE(zigbee_gpio_items); i++) {
-        const struct gpio_dt_spec *spec = zigbee_gpio_items[i].spec;
-        const char *name = zigbee_gpio_items[i].name;
-
-        if (!gpio_is_ready_dt(spec)) {
-            LOG_ERR("GPIO not ready for %s", name);
-            return -ENODEV;
-        }
-
-        ret = gpio_pin_configure_dt(spec, GPIO_OUTPUT_INACTIVE);
-        if (ret < 0) {
-            LOG_ERR("%s config failed: %d", name, ret);
-            return ret;
-        }
-    }
-
     if (!device_is_ready(uart_zigbee_dev)) {
         LOG_ERR("UART_ZIGBEE not ready");
         return -ENODEV;

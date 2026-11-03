@@ -158,27 +158,19 @@ int main(void) {
     switch (current_proto) {
     case PROTO_BLE:
         LOG_INF("Selected: BLE");
+        disable_zigbee();
         ret = ble_init();
-        if (ret) {
+        if (ret < 0) {
             LOG_ERR("BLE init failed: %d", ret);
-            if (zigbee_enabled) {
-                LOG_WRN("Falling back to Zigbee");
-                current_proto = PROTO_ZIGBEE;
-                ret = zigbee_init();
-                if (ret) {
-                    LOG_ERR("Zigbee fallback failed: %d", ret);
-                    return -1;
-                }
-            } else {
-                return -1;
-            }
+            return -1;
         }
         break;
 
     case PROTO_ZIGBEE:
         LOG_INF("Selected: Zigbee");
+        enable_zigbee();
         ret = zigbee_init();
-        if (ret) {
+        if (ret < 0) {
             LOG_ERR("Zigbee init failed: %d", ret);
             return -1;
         }
@@ -195,7 +187,6 @@ int main(void) {
 
     worker_t *worker = get_worker();
     if (ble_enabled) {
-        disable_zigbee();
         k_thread_create(&bt_rx_thread_data, bt_rx_stack,
                         K_THREAD_STACK_SIZEOF(bt_rx_stack),
                         ble_rx_thread_entry, worker, NULL, NULL,
@@ -208,7 +199,6 @@ int main(void) {
                         BT_TX_PRIORITY, 0, K_NO_WAIT);
         k_thread_name_set(&bt_tx_thread_data, "BT_TX");
     }else{
-        enable_zigbee();
         if( zigbee_enabled){
                          k_thread_create(&zigbee_rx_thread_data, zigbee_rx_stack,
                             K_THREAD_STACK_SIZEOF(zigbee_rx_stack),
