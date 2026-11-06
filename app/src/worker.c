@@ -32,15 +32,13 @@ worker_t *get_worker(void) {
     }else{
         memset(worker, 0, sizeof(worker_t));
         init_worker(worker);
-        init_work_timer(&worker->timer_heartbeat, 1000, timer_heartbeat_expiry_cb);
-        init_work_timer(&worker->timer_action, 200, timer_action_expiry_cb);
-        //TODO just for test, should be 200
-        init_work_timer(&worker->timer_bee, 2000, timer_bee_expiry_cb);
+        init_work_timer(&worker->timer_heartbeat, 10000, timer_heartbeat_expiry_cb);
+        init_work_timer(&worker->timer_action, 300, timer_action_expiry_cb);
+        init_work_timer(&worker->timer_bee, 300, timer_bee_expiry_cb);
     }
 
     return worker;    
 }
-
 
 bool is_worker_ready(worker_t *worker) {
     return worker != NULL && worker->is_connected && worker->is_ready;
@@ -199,7 +197,7 @@ uint8_t do_work(worker_t *worker, uint8_t *data, size_t len,
     if (data[0] != 0xAA || data[1]!= 0x55) {
         return 0;
     }
-    if (Xor(data, len - 1) != data[len - 1]) {
+    if (Xor(data+2, len - 3) != data[len - 1]) {
         return 0;
     }
 

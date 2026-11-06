@@ -458,22 +458,22 @@ void ble_tx_thread_entry(void *p1, void *p2, void *p3)
 
         int err = ble_send(msg.type, msg.data, msg.len);
         if (err < 0 ) {
-            if( msg.type == BLE_TX_NOTIFY || msg.type == BLE_TX_NUS) {
-                fail_send_counter++;
-                if (fail_send_counter >= 20) {
-                    stop_work_timer(&worker->timer_heartbeat);
-                    stop_work_timer(&worker->timer_action);
-                    LOG_ERR("BLE TX NOYTIFY failed %d times, resetting connection", fail_send_counter);
-                    if (current_conn) {
-                        bt_conn_disconnect(current_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); 
-                    }
-                    fail_send_counter = 0;
-                    ble_state = BLE_ST_DISCONNECTED;
-                    update_led_from_state();
-                }
-            } else{
+            // if( msg.type == BLE_TX_NOTIFY || msg.type == BLE_TX_NUS) {
+            //     fail_send_counter++;
+            //     if (fail_send_counter >= 20) {
+            //         stop_work_timer(&worker->timer_heartbeat);
+            //         stop_work_timer(&worker->timer_action);
+            //         LOG_ERR("BLE TX NOYTIFY failed %d times, resetting connection", fail_send_counter);
+            //         if (current_conn) {
+            //             bt_conn_disconnect(current_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); 
+            //         }
+            //         fail_send_counter = 0;
+            //         ble_state = BLE_ST_DISCONNECTED;
+            //         update_led_from_state();
+            //     }
+            // } else{
                 LOG_ERR("ble_send failed (type=%d, err=%d)", msg.type, err);
-            }
+            // }
         } else {
             LOG_DBG("ble_send succeeded");
             fail_send_counter = 0;

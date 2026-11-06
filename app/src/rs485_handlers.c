@@ -113,7 +113,6 @@ void rs485_send(const uint8_t *data, size_t len)
     }
 
     if (!tx_done) {
-        LOG_ERR("RS485 TX timeout!");
         uart_irq_tx_disable(uart485_dev);
     }
 }

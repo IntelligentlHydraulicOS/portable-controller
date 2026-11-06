@@ -248,7 +248,7 @@ int main(void) {
         return -1;
     }
 
-    thread_pool_submit(feeddog_thread, NULL, K_NO_WAIT);
+    // thread_pool_submit(feeddog_thread, NULL, K_NO_WAIT);
     // thread_pool_submit(rs485_test_thread, NULL, K_NO_WAIT);
     // thread_pool_submit(timer_test_thread,  NULL, K_NO_WAIT);
     // thread_pool_submit(led_test_thread,  NULL, K_NO_WAIT);

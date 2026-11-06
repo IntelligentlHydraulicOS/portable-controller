@@ -104,16 +104,21 @@ void timer_action_expiry_cb(struct k_timer *timer)
     bool from_cmd = atomic_cas(&wt->pending_cmds, 1, 0);
     if(from_cmd){
         LOG_DBG("Action timer triggered by command");
-        uint8_t channel_offset = get_channel_offset_by_action_id(worker->action_id);
-        LOG_INF("channel_offset: %u", channel_offset);
-        if (channel_offset != 0xFF) {
-            uint32_t channel = 1 << channel_offset;
+        uint32_t channel = get_channel_offset_by_action_id(worker->action_id);
+        LOG_INF("channel: %u", channel);
+        if (channel != 0xFF) {
             struct tx_msg tx_msg;
             memset(&tx_msg.data, 0, TX_MSG_MAX_DATA);
             tx_msg.data[0] = 0x55;
             tx_msg.data[1] = 0xAA;
             tx_msg.data[2] = 0x00;
             tx_msg.data[3] = 0x09;  
+
+            // tx_msg.data[4] = 0x0F;
+            // tx_msg.data[5] = 0xFF;
+            // tx_msg.data[6] = 0xFF;
+            // tx_msg.data[7] = 0xFF;
+
             tx_msg.data[4] = 0x00;
             tx_msg.data[5] = 0x00;
             tx_msg.data[6] = 0x00;
