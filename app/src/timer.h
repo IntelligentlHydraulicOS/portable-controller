@@ -12,6 +12,7 @@ typedef struct work_timer_t{
     int period_msecond;
     struct k_timer timer;
     atomic_t      pending_cmds;
+    uint16_t      serial_num;
 } work_timer_t;
 
 int init_work_timer(work_timer_t *work_timer, int period_msecond, void (*callback)(struct k_timer *timer));

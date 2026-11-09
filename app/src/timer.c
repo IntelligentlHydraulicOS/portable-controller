@@ -8,6 +8,7 @@
 #include "action.h"
 #include "gpio.h"
 #include "led_control.h"
+#include "battery_scan.h"
 
 LOG_MODULE_REGISTER(timer, LOG_LEVEL_INF);
 
@@ -34,6 +35,7 @@ int start_work_timer(work_timer_t *work_timer)
     }
     atomic_set(&work_timer->pending_cmds, 1);
     work_timer->is_active = true;
+    work_timer->serial_num = 0;
     k_timer_start(&work_timer->timer, K_MSEC(1), K_MSEC(work_timer->period_msecond));
     return 0;
 }
@@ -48,6 +50,7 @@ int stop_work_timer(work_timer_t *work_timer)
         k_timer_stop(&work_timer->timer);
         work_timer->is_active = false;
     }
+    work_timer->serial_num = 0;
     atomic_set(&work_timer->pending_cmds, 0);
 
     return 0;
@@ -61,11 +64,11 @@ void timer_heartbeat_expiry_cb(struct k_timer *timer)
     struct tx_msg tx_msg;
     memset(&tx_msg, 0, sizeof(tx_msg));
     tx_msg.data[0] = 0xAA;
-    tx_msg.data[1] = 0x55;
-    tx_msg.data[2] = 0x00;
-    tx_msg.data[3] = worker->local_id;  
-    tx_msg.data[4] = 0x00;
-    tx_msg.data[5] = 0x00;
+    tx_msg.data[1] = 0x56;
+    tx_msg.data[2] = g_battery_info.capacity/100;
+    tx_msg.data[3] = g_battery_info.adout_voltage;  
+    tx_msg.data[4] = wt->serial_num & 0xFF; // Low byte of serial number
+    tx_msg.data[5] = wt->serial_num >> 8;   // High byte of serial number
     tx_msg.data[6] = 0x00;
     tx_msg.data[7] = Xor(tx_msg.data, 8);
     tx_msg.len = 8;
@@ -102,7 +105,7 @@ void timer_action_expiry_cb(struct k_timer *timer)
     worker_t *worker = CONTAINER_OF(wt, worker_t, timer_action);
 
     bool from_cmd = atomic_cas(&wt->pending_cmds, 1, 0);
-    if(from_cmd){
+    // if(from_cmd){
         LOG_DBG("Action timer triggered by command");
         uint32_t channel = get_channel_offset_by_action_id(worker->action_id);
         LOG_INF("channel: %u", channel);
@@ -113,12 +116,6 @@ void timer_action_expiry_cb(struct k_timer *timer)
             tx_msg.data[1] = 0xAA;
             tx_msg.data[2] = 0x00;
             tx_msg.data[3] = 0x09;  
-
-            // tx_msg.data[4] = 0x0F;
-            // tx_msg.data[5] = 0xFF;
-            // tx_msg.data[6] = 0xFF;
-            // tx_msg.data[7] = 0xFF;
-
             tx_msg.data[4] = 0x00;
             tx_msg.data[5] = 0x00;
             tx_msg.data[6] = 0x00;
@@ -134,12 +131,12 @@ void timer_action_expiry_cb(struct k_timer *timer)
         } else {
             LOG_WRN("Invalid action_id: %u", worker->action_id);
         }
-    }else{
-        LOG_DBG("Action timer triggered by expiry");
-        if (wt->is_active) {
-            stop_work_timer(&worker->timer_action);
-        }
-    }
+    // }else{
+    //     LOG_DBG("Action timer triggered by expiry");
+        // if (wt->is_active) {
+        //     stop_work_timer(&worker->timer_action);
+        // }
+    // }
 }
 
 void timer_bee_expiry_cb(struct k_timer *timer)
@@ -151,15 +148,9 @@ void timer_bee_expiry_cb(struct k_timer *timer)
     bool from_cmd = atomic_cas(&wt->pending_cmds, 1, 0);
     if(from_cmd){
         LOG_DBG("Bee timer triggered by command");
-        //TODO just for test
-        led_control_blink_alt(0, 255, 0,   0, 0, 255,   250);
         buzzer_on();
     }else{
         LOG_DBG("Bee timer triggered by expiry");
-        buzzer_off();
-        stop_work_timer(&worker->timer_bee);
-        // TODO just for test
-        led_control_static(0, 255, 0);
     }
 }
 

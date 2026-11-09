@@ -259,7 +259,7 @@ int main(void) {
     battery_scan_timer(ble_enabled, zigbee_enabled);
     LOG_INF("All timers created");
 
-    running_led(LED_ON);
+    running_led(LED_OFF);
     link_led(LED_OFF);
     enout_on();
     enlock_on();

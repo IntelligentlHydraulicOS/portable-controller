@@ -32,9 +32,10 @@ worker_t *get_worker(void) {
     }else{
         memset(worker, 0, sizeof(worker_t));
         init_worker(worker);
-        init_work_timer(&worker->timer_heartbeat, 10000, timer_heartbeat_expiry_cb);
+        init_work_timer(&worker->timer_heartbeat, 1000, timer_heartbeat_expiry_cb);
         init_work_timer(&worker->timer_action, 300, timer_action_expiry_cb);
         init_work_timer(&worker->timer_bee, 300, timer_bee_expiry_cb);
+        worker->is_connected = true;
     }
 
     return worker;    
@@ -115,8 +116,21 @@ uint8_t choose_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
     //     return 0;
     // }
     uint8_t action_id = data[3];
+
+    if (action_id == 0XFF) {
+        worker->action_id = 0;
+        worker->is_ready = false;
+        stop_work_timer(&worker->timer_action);
+        stop_work_timer(&worker->timer_bee);
+        buzzer_off();
+        running_led(LED_OFF);
+        snprintf((char *)reply, TX_MSG_MAX_DATA, "Action canceled");
+        *reply_len = strlen((char *)reply); 
+        return 0;
+    }
     worker->action_id = action_id;
     worker->is_ready = true;
+    running_led(LED_ON);
 
     // action depends on the remote controller
     start_work_timer(&worker->timer_action);
@@ -143,6 +157,7 @@ uint8_t cancel_action_handler(worker_t *worker, uint8_t *data, size_t len, uint8
         worker->is_ready = false;
         stop_work_timer(&worker->timer_action);
         stop_work_timer(&worker->timer_bee);
+        buzzer_off();
         snprintf((char *)reply, TX_MSG_MAX_DATA, "Action canceled");
         *reply_len = strlen((char *)reply); 
         return 1;

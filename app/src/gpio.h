@@ -6,8 +6,8 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 
-#define LED_ON  1
-#define LED_OFF 0
+#define LED_ON  0
+#define LED_OFF 1
 
 void buzzer_on(void);
 void buzzer_off(void);
