@@ -177,7 +177,7 @@ void rs485_test_thread(void *arg)
     while (1) {
         memset(&tx_msg, 0, sizeof(tx_msg));
 
-        uint8_t test_data[] = {0x55, 0xAA, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x12};
+        uint8_t test_data[] = {0x55, 0xAA, 0x00, 0x09, 0x00, 0x00, 0x00, 0x04, 0x0c};
         memcpy(tx_msg.data, test_data, sizeof(test_data));
         tx_msg.len = sizeof(test_data);
 

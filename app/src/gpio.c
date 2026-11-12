@@ -18,16 +18,16 @@ static const struct gpio_dt_spec en_zigbee   = GPIO_DT_SPEC_GET(DT_PATH(zephyr_u
 static const struct gpio_dt_spec link_zigbee = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), zigbee_link_gpios);
 static const struct gpio_dt_spec mode_zigbee = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), zigbee_mode_gpios);
 
+static const struct gpio_dt_spec nc1 = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), nc1_gpios);
+static const struct gpio_dt_spec nc2 = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), nc2_gpios);
+static const struct gpio_dt_spec nc3 = GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), nc3_gpios);
 
-struct zigbee_gpio_init_item {
-    const struct gpio_dt_spec *spec;
-    const char *name;
-};
 
-static const struct zigbee_gpio_init_item zigbee_gpio_items[] = {
-    { &en_zigbee,   "EN_ZIG"   },
-    { &mode_zigbee, "MODE_ZIG" },
-};
+void config_floating_pins(void) {
+    gpio_pin_configure_dt(&nc1, GPIO_INPUT | GPIO_DISCONNECTED);
+    gpio_pin_configure_dt(&nc2, GPIO_INPUT | GPIO_DISCONNECTED);
+    gpio_pin_configure_dt(&nc3, GPIO_INPUT | GPIO_DISCONNECTED);
+}
 
 int init_gpio(void)
 {
@@ -36,7 +36,7 @@ int init_gpio(void)
         return -ENODEV;
     }
 
-    int ret = gpio_pin_configure_dt(&r_en, GPIO_OUTPUT_INACTIVE);
+    int ret = gpio_pin_configure_dt(&r_en, GPIO_OUTPUT_LOW);
     if (ret < 0) {
         LOG_ERR("failed to configure red LED pin: %d", ret);
         return ret;
@@ -46,7 +46,7 @@ int init_gpio(void)
         LOG_ERR("GPIO NOT ready for green LED");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&g_en, GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure_dt(&g_en, GPIO_OUTPUT_LOW);
     if (ret < 0) {
         LOG_ERR("failed to configure green LED pin: %d", ret);
         return ret;
@@ -56,7 +56,7 @@ int init_gpio(void)
         LOG_ERR("GPIO NOT ready for blue LED");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&b_en, GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure_dt(&b_en, GPIO_OUTPUT_LOW);
     if (ret < 0) {
         LOG_ERR("failed to configure blue LED pin: %d", ret);
         return ret;
@@ -65,7 +65,7 @@ int init_gpio(void)
         LOG_ERR("GPIO NOT ready for link LED");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&linkled_en, GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure_dt(&linkled_en, GPIO_OUTPUT_LOW);
     if (ret < 0) {
         LOG_ERR("failed to configure link LED pin: %d", ret);
         return ret; 
@@ -75,7 +75,7 @@ int init_gpio(void)
         LOG_ERR("GPIO NOT ready for running LED");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&runningled_en, GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure_dt(&runningled_en, GPIO_OUTPUT_LOW);
     if (ret < 0) {
         LOG_ERR("failed to configure running LED pin: %d", ret);
         return ret;
@@ -85,7 +85,7 @@ int init_gpio(void)
         LOG_ERR("GPIO NOT ready for buzzer");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&buzzer, GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure_dt(&buzzer, GPIO_OUTPUT_LOW);
     if (ret < 0) {
         LOG_ERR("failed to configure buzzer pin: %d", ret);
         return ret;
@@ -96,7 +96,7 @@ int init_gpio(void)
         LOG_ERR("GPIO NOT ready for enout");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&enout, GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure_dt(&enout, GPIO_OUTPUT_LOW);
     if (ret < 0) {
         LOG_ERR("failed to configure enout pin: %d", ret);
         return ret;
@@ -107,7 +107,7 @@ int init_gpio(void)
         LOG_ERR("GPIO NOT ready for enlock");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&enlock, GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure_dt(&enlock, GPIO_OUTPUT_LOW);
     if (ret < 0) {
         LOG_ERR("failed to configure enlock pin: %d", ret);
         return ret;
@@ -118,40 +118,43 @@ int init_gpio(void)
         LOG_ERR("ADOUT GPIO not ready");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&adout, GPIO_INPUT| GPIO_PULL_DOWN);
+    ret = gpio_pin_configure_dt(&adout, GPIO_INPUT| GPIO_DISCONNECTED);
     if (ret < 0) {
         LOG_ERR("ADOUT config as INPUT failed: %d", ret);
         return ret;
     }
 
-
     if (!gpio_is_ready_dt(&link_zigbee)) {
         LOG_ERR("LINK_ZIG GPIO not ready");
         return -ENODEV;
     }
-    ret = gpio_pin_configure_dt(&link_zigbee, GPIO_INPUT| GPIO_PULL_DOWN);
+    ret = gpio_pin_configure_dt(&link_zigbee, GPIO_INPUT| GPIO_DISCONNECTED);
     if (ret < 0) {
         LOG_ERR("LINK_ZIG config as INPUT failed: %d", ret);
         return ret;
     }
 
-    for (size_t i = 0; i < ARRAY_SIZE(zigbee_gpio_items); i++) {
-        const struct gpio_dt_spec *spec = zigbee_gpio_items[i].spec;
-        const char *name = zigbee_gpio_items[i].name;
-
-        if (!gpio_is_ready_dt(spec)) {
-            LOG_ERR("GPIO not ready for %s", name);
-            return -ENODEV;
-        }
-
-        ret = gpio_pin_configure_dt(spec, GPIO_OUTPUT_INACTIVE);
-        if (ret < 0) {
-            LOG_ERR("%s config failed: %d", name, ret);
-            return ret;
-        }
+    if (!device_is_ready(mode_zigbee.port)) {
+        LOG_ERR("GPIO NOT ready for red mode_zigbee");
+        return -ENODEV;
     }
-    LOG_INF("Zigbee GPIOs configured");
 
+    ret = gpio_pin_configure_dt(&mode_zigbee, GPIO_OUTPUT_LOW);
+    if (ret < 0) {
+        LOG_ERR("failed to configure red LED pin: %d", ret);
+        return ret;
+    }
+
+    if (!device_is_ready(en_zigbee.port)) {
+        LOG_ERR("GPIO NOT ready for red LED");
+        return -ENODEV;
+    }
+
+    ret = gpio_pin_configure_dt(&en_zigbee, GPIO_OUTPUT_LOW);
+    if (ret < 0) {
+        LOG_ERR("failed to configure red LED pin: %d", ret);
+        return ret;
+    }
     return 0;
 }
 
@@ -202,13 +205,14 @@ void enlock_off(void)
     gpio_pin_set_dt(&enlock, 0);
 }
 
-int read_gpio_adout(void)
+void enable_zigbee(void)
 {
-    if (!gpio_is_ready_dt(&adout)) {
-        LOG_ERR("ADOUT GPIO not ready");
-        return -ENODEV;
-    }
-    return gpio_pin_get_dt(&adout);
+    gpio_pin_set_dt(&en_zigbee, 1);
+}
+
+void disable_zigbee(void)
+{
+    gpio_pin_set_dt(&en_zigbee, 0);
 }
 
 int read_zigbee_link_status()
@@ -221,12 +225,11 @@ int read_zigbee_link_status()
     return link_state;
 }
 
-void enable_zigbee(void)
+int read_gpio_adout(void)
 {
-    gpio_pin_set_dt(&en_zigbee, 1);
-}
-
-void disable_zigbee(void)
-{
-    gpio_pin_set_dt(&en_zigbee, 0);
+    if (!gpio_is_ready_dt(&adout)) {
+        LOG_ERR("ADOUT GPIO not ready");
+        return -ENODEV;
+    }
+    return gpio_pin_get_dt(&adout);
 }

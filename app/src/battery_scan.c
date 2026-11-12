@@ -41,13 +41,13 @@ static void adc_sample_work_handler(struct k_work *work)
     if (level > 5) level = 5;
 
     g_battery_info.level = level;
-    // LOG_INF("Battery: %d mV, %d%%, %d/5 bars", g_battery_info.voltage, g_battery_info.capacity, g_battery_info.level);
+    LOG_INF("Battery: %d mV, %d%%, %d/5 bars", g_battery_info.voltage, g_battery_info.capacity, g_battery_info.level);
 
     k_msleep(5);
 
     rc = battery_monitor_get_current(&g_battery_info.current);
     if (rc == 0) {
-        // LOG_INF("Current: %d mA", g_battery_info.current);
+        LOG_INF("Current: %d mA", g_battery_info.current);
     } else {
         LOG_WRN("Current read failed: %d", rc);
     }
@@ -55,7 +55,7 @@ static void adc_sample_work_handler(struct k_work *work)
     //TODO if (current < 0) do something to indicate discharging, else charging;
     g_battery_info.adout_voltage = read_gpio_adout();
     if (g_battery_info.adout_voltage >= 0) {
-        // LOG_INF("ADOUT Voltage: %d V", g_battery_info.adout_voltage);
+        LOG_INF("ADOUT Voltage: %d V", g_battery_info.adout_voltage);
     } else {
         LOG_WRN("ADOUT Voltage read failed: %d", g_battery_info.adout_voltage);
     }
