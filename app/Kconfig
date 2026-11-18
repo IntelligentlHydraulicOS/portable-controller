@@ -1,0 +1,6 @@
+source "Kconfig.zephyr"
+
+config PORTABLE_CONTROLLER_SYSTEM_PM
+	bool "Application-provided system PM support"
+	default y
+	select HAS_PM

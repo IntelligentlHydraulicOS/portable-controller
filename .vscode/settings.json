@@ -1,0 +1,6 @@
+{
+    "cmake.sourceDirectory": "C:/code/portable_controller/portable_controller/app",
+    "nrf-connect.applications": [
+        "${workspaceFolder}\\app"
+    ]
+}
